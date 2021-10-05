@@ -24,7 +24,7 @@
 VERSION = 2009
 PATCHLEVEL = 08
 SUBLEVEL =
-EXTRAVERSION =
+EXTRAVERSION = -lab126
 ifneq "$(SUBLEVEL)" ""
 U_BOOT_VERSION = $(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
 else
@@ -106,7 +106,7 @@ OBJTREE		:= $(if $(BUILD_DIR),$(BUILD_DIR),$(CURDIR))
 SRCTREE		:= $(CURDIR)
 TOPDIR		:= $(SRCTREE)
 LNDIR		:= $(OBJTREE)
-export	TOPDIR SRCTREE OBJTREE
+export	O TOPDIR SRCTREE OBJTREE
 
 MKCONFIG	:= $(SRCTREE)/mkconfig
 export MKCONFIG
@@ -143,7 +143,7 @@ SUBDIRS	= tools \
 	  examples/standalone \
 	  examples/api
 
-.PHONY : $(SUBDIRS)
+.PHONY : $(SUBDIRS) install
 
 ifeq ($(obj)include/config.mk,$(wildcard $(obj)include/config.mk))
 
@@ -3229,6 +3229,18 @@ mx31pdk_nand_config	: unconfig
 	fi
 	@$(MKCONFIG) -a mx31pdk arm arm1136 mx31pdk freescale mx31
 
+imx50_yoshi_config :    unconfig
+	@$(MKCONFIG) $(@:_config=) arm arm_cortexa8 imx50_yoshi NULL mx50
+
+imx50_yoshi_bist_config :    unconfig
+	@$(MKCONFIG) $(@:_config=) arm arm_cortexa8 imx50_yoshi NULL mx50
+
+imx50_yoshime_config :    unconfig
+	@$(MKCONFIG) $(@:_config=) arm arm_cortexa8 imx50_yoshi NULL mx50
+
+imx50_yoshime_bist_config :    unconfig
+	@$(MKCONFIG) $(@:_config=) arm arm_cortexa8 imx50_yoshi NULL mx50
+
 omap2420h4_config	: unconfig
 	@$(MKCONFIG) $(@:_config=) arm arm1136 omap2420h4 NULL omap24xx
 
@@ -3720,4 +3732,15 @@ backup:
 	F=`basename $(TOPDIR)` ; cd .. ; \
 	gtar --force-local -zcvf `date "+$$F-%Y-%m-%d-%T.tar.gz"` $$F
 
+install:
+	install -d /targets/$(shell sb-conf cu)/$(TARGET)
+	install -m 644 u-boot.bin /targets/$(shell sb-conf cu)/$(TARGET)
+	install -m 644 prod/u-boot.bin /targets/$(shell sb-conf cu)/$(TARGET)/u-boot.prod.bin
+	install -m 644 bist/u-boot.bin /targets/$(shell sb-conf cu)/$(TARGET)/u-boot.bist.bin
+	install -d /targets/$(shell sb-conf cu)/$(TARGET)/bist
+	install -m 644 bist/u-boot.bin bist/u-boot.map /targets/$(shell sb-conf cu)/$(TARGET)/bist
+	install -d /targets/$(shell sb-conf cu)/$(TARGET)/prod
+	install -m 644 prod/u-boot.bin prod/u-boot.map /targets/$(shell sb-conf cu)/$(TARGET)/prod
+	install -d /usr/local/bin
+	install -m 755 prod/tools/mkimage /usr/local/bin/mkimage
 #########################################################################

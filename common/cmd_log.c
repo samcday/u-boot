@@ -48,6 +48,8 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+extern unsigned int get_dram_size(void);
+
 /* Local prototypes */
 static void logbuff_putc (const char c);
 static void logbuff_puts (const char *s);
@@ -68,7 +70,7 @@ static char *lbuf;
 
 unsigned long __logbuffer_base(void)
 {
-	return CONFIG_SYS_SDRAM_BASE + gd->bd->bi_memsize - LOGBUFF_LEN;
+    return CONFIG_SYS_SDRAM_BASE + CONFIG_SYS_SDRAM_SIZE - LOGBUFF_LEN;
 }
 unsigned long logbuffer_base (void) __attribute__((weak, alias("__logbuffer_base")));
 
@@ -76,7 +78,6 @@ void logbuff_init_ptrs (void)
 {
 	unsigned long tag, post_word;
 	char *s;
-
 #ifdef CONFIG_ALT_LB_ADDR
 	log = (logbuff_t *)CONFIG_ALT_LH_ADDR;
 	lbuf = (char *)CONFIG_ALT_LB_ADDR;
@@ -121,6 +122,7 @@ void logbuff_reset (void)
 #ifndef CONFIG_ALT_LB_ADDR
 	memset (log, 0, sizeof (logbuff_t));
 #endif
+	memset (lbuf, 0, LOGBUFF_LEN);
 	if (log_version == 2) {
 		log->v2.tag = LOGBUFF_MAGIC;
 #ifdef CONFIG_ALT_LB_ADDR
@@ -310,7 +312,7 @@ static int logbuff_printk(const char *line)
 			}
 		}
 		if (msg_level < console_loglevel) {
-			printf("%s", msg);
+			serial_puts(msg);
 		}
 		if (line_feed)
 			msg_level = -1;

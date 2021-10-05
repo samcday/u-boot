@@ -1,5 +1,7 @@
 /*
- * Copyright 2008, Freescale Semiconductor, Inc
+ * (C) Copyright 2009-2010 Freescale Semiconductor, Inc.
+ *
+ * Copyright 2008-2010, Freescale Semiconductor, Inc
  * Andy Fleming
  *
  * Based (loosely) on the Linux code
@@ -44,6 +46,8 @@
 #define MMC_MODE_HS_52MHz	0x010
 #define MMC_MODE_4BIT		0x100
 #define MMC_MODE_8BIT		0x200
+#define EMMC_MODE_4BIT_DDR	0x400
+#define EMMC_MODE_8BIT_DDR	0x800
 
 #define SD_DATA_4BIT	0x00040000
 
@@ -51,6 +55,7 @@
 
 #define MMC_DATA_READ		1
 #define MMC_DATA_WRITE		2
+#define MMC_DATA_AUTO_STOP	4
 
 #define NO_CARD_ERR		-16 /* No SD/MMC card inserted */
 #define UNUSABLE_ERR		-17 /* Unusable Card */
@@ -79,6 +84,7 @@
 #define SD_CMD_SEND_RELATIVE_ADDR	3
 #define SD_CMD_SWITCH_FUNC		6
 #define SD_CMD_SEND_IF_COND		8
+#define SD_CMD_SELECT_PARTITION   43
 
 #define SD_CMD_APP_SET_BUS_WIDTH	6
 #define SD_CMD_APP_SEND_OP_COND		41
@@ -90,6 +96,7 @@
 
 #define MMC_HS_TIMING		0x00000100
 #define MMC_HS_52MHZ		0x2
+#define EMMC_MODE_DDR_3V		0x4
 
 #define OCR_BUSY	0x80000000
 #define OCR_HCS		0x40000000
@@ -125,14 +132,24 @@
 #define SD_SWITCH_SWITCH	1
 
 /*
+ * SEND_STATUS response bits
+ */
+#define MMC_STATUS_READY_FOR_DATA	(1 << 8)
+
+/*
  * EXT_CSD fields
  */
 
+#define EXT_CSD_BOOT_WP		173	/* R/W */
+#define EXT_CSD_BOOT_BUS_WIDTH	177	/* R/W */
+#define EXT_CSD_BOOT_CFG_PROT	178	/* R/W */
+#define EXT_CSD_BOOT_CONFIG	179	/* R/W */
 #define EXT_CSD_BUS_WIDTH	183	/* R/W */
 #define EXT_CSD_HS_TIMING	185	/* R/W */
 #define EXT_CSD_CARD_TYPE	196	/* RO */
 #define EXT_CSD_REV		192	/* RO */
 #define EXT_CSD_SEC_CNT		212	/* RO, 4 bytes */
+#define EXT_CSD_BOOT_SIZE_MULT	226	/* RO */
 
 /*
  * EXT_CSD field definitions
@@ -148,6 +165,26 @@
 #define EXT_CSD_BUS_WIDTH_1	0	/* Card is in 1 bit mode */
 #define EXT_CSD_BUS_WIDTH_4	1	/* Card is in 4 bit mode */
 #define EXT_CSD_BUS_WIDTH_8	2	/* Card is in 8 bit mode */
+#define EXT_CSD_BUS_WIDTH_DDR	4       /* Card is in DDR mode */
+#define EXT_CSD_BUS_WIDTH_4_DDR (EXT_CSD_BUS_WIDTH_DDR | EXT_CSD_BUS_WIDTH_4)
+#define EXT_CSD_BUS_WIDTH_8_DDR (EXT_CSD_BUS_WIDTH_DDR | EXT_CSD_BUS_WIDTH_8)
+
+#define EXT_CSD_BOOT_BUS_WIDTH_1BIT	(0)
+#define EXT_CSD_BOOT_BUS_WIDTH_4BIT	(1 << 0)
+#define EXT_CSD_BOOT_BUS_WIDTH_8BIT	(1 << 1)
+#define EXT_CSD_BOOT_BUS_WIDTH_SDR_HS	(1 << 3)
+#define EXT_CSD_BOOT_BUS_WIDTH_DDR	(1 << 4)
+
+#define EXT_CSD_BOOT_PARTITION_ENABLE_MASK	(0x7 << 3)
+#define EXT_CSD_BOOT_PARTITION_DISABLE		(0x0)
+#define EXT_CSD_BOOT_PARTITION_PART1		(0x1 << 3)
+#define EXT_CSD_BOOT_PARTITION_PART2		(0x2 << 3)
+#define EXT_CSD_BOOT_PARTITION_USER		(0x7 << 3)
+
+#define EXT_CSD_BOOT_PARTITION_ACCESS_MASK	(0x7)
+#define EXT_CSD_BOOT_PARTITION_ACCESS_DISABLE   (0x0)
+#define EXT_CSD_BOOT_PARTITION_ACCESS_PART1   	(0x1)
+#define EXT_CSD_BOOT_PARTITION_ACCESS_PART2   	(0x2)
 
 #define R1_ILLEGAL_COMMAND		(1 << 22)
 #define R1_APP_CMD			(1 << 5)
@@ -168,7 +205,6 @@
 #define MMC_RSP_R5      (MMC_RSP_PRESENT|MMC_RSP_CRC|MMC_RSP_OPCODE)
 #define MMC_RSP_R6      (MMC_RSP_PRESENT|MMC_RSP_CRC|MMC_RSP_OPCODE)
 #define MMC_RSP_R7      (MMC_RSP_PRESENT|MMC_RSP_CRC|MMC_RSP_OPCODE)
-
 
 struct mmc_cid {
 	unsigned long psn;
@@ -259,6 +295,11 @@ struct mmc {
 	uint read_bl_len;
 	uint write_bl_len;
 	u64 capacity;
+#ifdef CONFIG_BOOT_PARTITION_ACCESS
+	uint boot_config;
+	uint boot_size_mult;
+	uint boot_bus_width;
+#endif
 	block_dev_desc_t block_dev;
 	int (*send_cmd)(struct mmc *mmc,
 			struct mmc_cmd *cmd, struct mmc_data *data);
@@ -269,11 +310,16 @@ struct mmc {
 int mmc_register(struct mmc *mmc);
 int mmc_initialize(bd_t *bis);
 int mmc_init(struct mmc *mmc);
-int mmc_read(struct mmc *mmc, u64 src, uchar *dst, int size);
+int mmc_read(int dev_num, u32 src, uchar *dst, u32 size);
+int mmc_write(int dev_num, uchar * src, u32 dst, u32 size);
 struct mmc *find_mmc_device(int dev_num);
 void print_mmc_devices(char separator);
+#ifdef CONFIG_BOOT_PARTITION_ACCESS
+int mmc_switch_partition(struct mmc *mmc, uint part, uint enable_boot);
+int sd_switch_partition(struct mmc *mmc, uint part);
+#endif
 
-#ifndef CONFIG_GENERIC_MMC
-int mmc_legacy_init(int verbose);
+#if defined(CONFIG_LEGACY_MMC)
+int mmc_legacy_init(int mmc_device);
 #endif
 #endif /* _MMC_H_ */

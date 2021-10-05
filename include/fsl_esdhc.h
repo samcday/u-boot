@@ -2,7 +2,7 @@
  * FSL SD/MMC Defines
  *-------------------------------------------------------------------
  *
- * Copyright 2007-2008, Freescale Semiconductor, Inc
+ * Copyright (C) 2007-2008, 2010 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -26,13 +26,16 @@
 #ifndef  __FSL_ESDHC_H__
 #define	__FSL_ESDHC_H__
 
+#include <config.h>
 #include <asm/errno.h>
 
 /* FSL eSDHC-specific constants */
 #define SYSCTL			0x0002e02c
 #define SYSCTL_INITA		0x08000000
 #define SYSCTL_TIMEOUT_MASK	0x000f0000
-#define SYSCTL_CLOCK_MASK	0x00000fff
+#define SYSCTL_CLOCK_MASK	0x0000fff0
+#define SYSCTL_RSTA		0x01000000
+#define SYSCTL_SDCLKEN		0x00000008
 #define SYSCTL_PEREN		0x00000004
 #define SYSCTL_HCKEN		0x00000002
 #define SYSCTL_IPGEN		0x00000001
@@ -58,7 +61,7 @@
 #define IRQSTAT_CC		(0x00000001)
 
 #define CMD_ERR		(IRQSTAT_CIE | IRQSTAT_CEBE | IRQSTAT_CCE)
-#define DATA_ERR	(IRQSTAT_DEBE | IRQSTAT_DCE | IRQSTAT_DTOE)
+#define DATA_ERR	(IRQSTAT_DMAE | IRQSTAT_AC12E | IRQSTAT_DEBE | IRQSTAT_DCE | IRQSTAT_DTOE)
 
 #define IRQSTATEN		0x0002e034
 #define IRQSTATEN_DMAE		(0x10000000)
@@ -81,19 +84,24 @@
 #define IRQSTATEN_CC		(0x00000001)
 
 #define PRSSTAT			0x0002e024
+#define PRSSTAT_DAT0		(0x01000000)
 #define PRSSTAT_CLSL		(0x00800000)
 #define PRSSTAT_WPSPL		(0x00080000)
 #define PRSSTAT_CDPL		(0x00040000)
 #define PRSSTAT_CINS		(0x00010000)
 #define PRSSTAT_BREN		(0x00000800)
+#define PRSSTAT_SDSTB		(0x00000008)
 #define PRSSTAT_DLA		(0x00000004)
 #define PRSSTAT_CICHB		(0x00000002)
 #define PRSSTAT_CIDHB		(0x00000001)
 
 #define PROCTL			0x0002e028
-#define PROCTL_INIT		0x00000020
 #define PROCTL_DTW_4		0x00000002
 #define PROCTL_DTW_8		0x00000004
+#define PROCTL_D3CD		0x00000008
+#define PROCTL_LE		0x00000020
+#define PROCTL_ADMA1		0x00000100
+#define PROCTL_ADMA2		0x00000200
 
 #define CMDARG			0x0002e008
 
@@ -112,6 +120,7 @@
 #define XFERTYP_RSPTYP_48_BUSY	0x00030000
 #define XFERTYP_MSBSEL		0x00000020
 #define XFERTYP_DTDSEL		0x00000010
+#define XFERTYP_DDR_EN		0x00000008
 #define XFERTYP_AC12EN		0x00000004
 #define XFERTYP_BCEN		0x00000002
 #define XFERTYP_DMAEN		0x00000001
@@ -142,8 +151,40 @@
 #define ESDHC_HOSTCAPBLT_DMAS	0x00400000
 #define ESDHC_HOSTCAPBLT_HSS	0x00200000
 
-#ifdef CONFIG_FSL_ESDHC
+#define FSL_ADMA_DES_ATTR_SET		0x10
+#define FSL_ADMA_DES_ATTR_TRAN		0x20
+#define FSL_ADMA_DES_ATTR_LINK		0x30
+#define FSL_ADMA_DES_ATTR_INT		0x04
+#define FSL_ADMA_DES_ATTR_END		0x02
+#define FSL_ADMA_DES_ATTR_VALID		0x01
+
+#ifdef CONFIG_SYS_FSL_ESDHC_ADMA2
+#define FSL_ADMA_DES_LENGTH_OFFSET	16
+#else
+#define FSL_ADMA_DES_LENGTH_OFFSET	12
+#endif
+
+#define FSL_ADMA_DES_LENGTH_MASK	(0xFFFF << FSL_ADMA_DES_LENGTH_OFFSET)
+
+#define ESDHC_HOSTVER_VVN_MASK		0x0000ff00
+#define ESDHC_HOSTVER_VVN_SHIFT		8
+#define ESDHC_HOSTVER_DDR_SUPPORT	0x13
+
+#define ESDHC_DLLCTRL_SLV_OVERRIDE_VAL	12
+#define ESDHC_DLLCTRL_SLV_OVERRIDE_VAL_MASK	0x0000FC00
+#define ESDHC_DLLCTRL_SLV_OVERRIDE_VAL_SHIFT		10
+#define ESDHC_DLLCTRL_SLV_OVERRIDE		0x200
+
+struct fsl_esdhc_cfg {
+	u32	esdhc_base;
+	u32	no_snoop;
+	u32	clk_enable;
+	u32	max_clk;
+};
+
+#if defined(CONFIG_FSL_ESDHC) || defined(CONFIG_IMX_MMC)
 int fsl_esdhc_mmc_init(bd_t *bis);
+int fsl_esdhc_initialize(bd_t *bis, struct fsl_esdhc_cfg *cfg);
 void fdt_fixup_esdhc(void *blob, bd_t *bd);
 #else
 static inline int fsl_esdhc_mmc_init(bd_t *bis) { return -ENOSYS; }

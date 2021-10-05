@@ -50,11 +50,23 @@
 #include <onenand_uboot.h>
 #include <mmc.h>
 
+#if CONFIG_MX51_I2C
+#include "mx51_i2c.h"
+#endif
+#if CONFIG_MX50_I2C
+#include "mx50_i2c.h"
+#endif
 #ifdef CONFIG_DRIVER_SMC91111
 #include "../drivers/net/smc91111.h"
 #endif
 #ifdef CONFIG_DRIVER_LAN91C96
 #include "../drivers/net/lan91c96.h"
+#endif
+#ifdef CONFIG_POST
+#include <post.h>
+#endif
+#if defined(CONFIG_LOGBUFFER)
+#include <logbuff.h>
 #endif
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -124,23 +136,23 @@ void *sbrk (ptrdiff_t increment)
  * May be supplied by boards if desired
  */
 void inline __coloured_LED_init (void) {}
-void inline coloured_LED_init (void) __attribute__((weak, alias("__coloured_LED_init")));
+void coloured_LED_init (void) __attribute__((weak, alias("__coloured_LED_init")));
 void inline __red_LED_on (void) {}
-void inline red_LED_on (void) __attribute__((weak, alias("__red_LED_on")));
+void red_LED_on (void) __attribute__((weak, alias("__red_LED_on")));
 void inline __red_LED_off(void) {}
-void inline red_LED_off(void)	     __attribute__((weak, alias("__red_LED_off")));
+void red_LED_off(void)	     __attribute__((weak, alias("__red_LED_off")));
 void inline __green_LED_on(void) {}
-void inline green_LED_on(void) __attribute__((weak, alias("__green_LED_on")));
+void green_LED_on(void) __attribute__((weak, alias("__green_LED_on")));
 void inline __green_LED_off(void) {}
-void inline green_LED_off(void)__attribute__((weak, alias("__green_LED_off")));
+void green_LED_off(void)__attribute__((weak, alias("__green_LED_off")));
 void inline __yellow_LED_on(void) {}
-void inline yellow_LED_on(void)__attribute__((weak, alias("__yellow_LED_on")));
+void yellow_LED_on(void)__attribute__((weak, alias("__yellow_LED_on")));
 void inline __yellow_LED_off(void) {}
-void inline yellow_LED_off(void)__attribute__((weak, alias("__yellow_LED_off")));
+void yellow_LED_off(void)__attribute__((weak, alias("__yellow_LED_off")));
 void inline __blue_LED_on(void) {}
-void inline blue_LED_on(void)__attribute__((weak, alias("__blue_LED_on")));
+void blue_LED_on(void)__attribute__((weak, alias("__blue_LED_on")));
 void inline __blue_LED_off(void) {}
-void inline blue_LED_off(void)__attribute__((weak, alias("__blue_LED_off")));
+void blue_LED_off(void)__attribute__((weak, alias("__blue_LED_off")));
 
 /************************************************************************
  * Init Utilities							*
@@ -175,6 +187,12 @@ static int display_banner (void)
 #ifdef CONFIG_USE_IRQ
 	debug ("IRQ Stack: %08lx\n", IRQ_STACK_START);
 	debug ("FIQ Stack: %08lx\n", FIQ_STACK_START);
+#else
+	{
+	    unsigned long sp;
+		__asm__ __volatile__("mov %0, %%sp \n":"=r"(sp));
+		debug ("Stack: %08lx %08lx\n", sp, CONFIG_SYS_INIT_SP_OFFSET);
+	}
 #endif
 
 	return (0);
@@ -223,6 +241,12 @@ static void display_flash_config (ulong size)
 static int init_func_i2c (void)
 {
 	puts ("I2C:   ");
+#if defined(CONFIG_MX51_I2C) || defined(CONFIG_MX50_I2C)
+	i2c_init_board();
+#endif
+#if defined(CONFIG_MX35_I2C) || defined(CONFIG_MX50_I2C) || defined(CONFIG_MX51_I2C)
+	i2c_set_bus_num(1);	//set deafult bus number
+#endif
 	i2c_init (CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
 	puts ("ready\n");
 	return (0);
@@ -237,6 +261,28 @@ static int arm_pci_init(void)
 	return 0;
 }
 #endif /* CONFIG_CMD_PCI || CONFIG_PCI */
+
+static int mmc_early_init(void) 
+{
+#ifdef CONFIG_MMC_BOOTFLASH
+    puts ("MMC:  ");
+
+#if defined(CONFIG_GENERIC_MMC)
+    mmc_initialize(gd->bd);
+
+    return mmc_init(find_mmc_device(CONFIG_MMC_BOOTFLASH));
+
+#elif defined(CONFIG_LEGACY_MMC)
+    /* BEN - init MMC for mx35 only */
+    mmc_legacy_init(CONFIG_MMC_BOOTFLASH);
+#endif
+
+#endif /* CONFIG_MMC_BOOTFLASH */
+    
+    return 0;
+}
+
+
 
 /*
  * Breathe some life into the board...
@@ -264,6 +310,11 @@ static int arm_pci_init(void)
 typedef int (init_fnc_t) (void);
 
 int print_cpuinfo (void);
+#if defined(CONFIG_POST)
+void post_board_init (void);
+#endif
+
+extern int setup_board_info (void);
 
 init_fnc_t *init_sequence[] = {
 #if defined(CONFIG_ARCH_CPU_INIT)
@@ -282,6 +333,8 @@ init_fnc_t *init_sequence[] = {
 #if defined(CONFIG_DISPLAY_CPUINFO)
 	print_cpuinfo,		/* display cpu info (and speed) */
 #endif
+	mmc_early_init,		/* Init MMC early to read board parameters */
+	setup_board_info,	/* Set up board id, serial number */
 #if defined(CONFIG_DISPLAY_BOARDINFO)
 	checkboard,		/* display board info */
 #endif
@@ -386,9 +439,14 @@ void start_armboot (void)
 	serial_initialize();
 #endif
 
+#if defined(CONFIG_CMD_NET)
 	/* IP Address */
 	gd->bd->bi_ip_addr = getenv_IPaddr ("ipaddr");
+#endif
 
+#ifdef CONFIG_LOGBUFFER
+	logbuff_init_ptrs ();
+#endif
 	stdio_init ();	/* get the devices list going. */
 
 	jumptable_init ();
@@ -407,6 +465,11 @@ void start_armboot (void)
 #if defined(CONFIG_MISC_INIT_R)
 	/* miscellaneous platform dependent initialisations */
 	misc_init_r ();
+#endif
+
+#if defined(CONFIG_POST)
+	/* basic board dependent setup */
+	post_board_init ();
 #endif
 
 	/* enable exceptions */
@@ -437,6 +500,11 @@ extern void davinci_eth_set_mac_addr (const u_int8_t *addr);
 	}
 #endif /* CONFIG_DRIVER_SMC91111 || CONFIG_DRIVER_LAN91C96 */
 
+#if defined(CONFIG_ENC28J60_ETH) && !defined(CONFIG_ETHADDR)
+	extern void enc_set_mac_addr (void);
+	enc_set_mac_addr ();
+#endif /* CONFIG_ENC28J60_ETH && !CONFIG_ETHADDR*/
+
 	/* Initialize from environment */
 	if ((s = getenv ("loadaddr")) != NULL) {
 		load_addr = simple_strtoul (s, NULL, 16);
@@ -449,11 +517,6 @@ extern void davinci_eth_set_mac_addr (const u_int8_t *addr);
 
 #ifdef BOARD_LATE_INIT
 	board_late_init ();
-#endif
-
-#ifdef CONFIG_GENERIC_MMC
-	puts ("MMC:   ");
-	mmc_initialize (gd->bd);
 #endif
 
 #if defined(CONFIG_CMD_NET)
@@ -477,5 +540,17 @@ extern void davinci_eth_set_mac_addr (const u_int8_t *addr);
 void hang (void)
 {
 	puts ("### ERROR ### Please RESET the board ###\n");
+#if defined(CONFIG_HANG_FEEDBACK)
+	hang_feedback();
+#endif
 	for (;;);
 }
+
+#if defined(CONFIG_POST)
+void post_board_init (void)
+{
+  post_init_f();
+  post_bootmode_init();
+  post_run(NULL, POST_ROM | post_bootmode_get(0));
+}
+#endif

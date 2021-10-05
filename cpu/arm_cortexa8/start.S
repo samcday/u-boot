@@ -9,6 +9,7 @@
  * Copyright (c) 2003	Richard Woodruff <r-woodruff2@ti.com>
  * Copyright (c) 2003	Kshitij <kshitij@ti.com>
  * Copyright (c) 2006-2008 Syed Mohammed Khasim <x0khasim@ti.com>
+ * Copyright (c) 2009 Freescale Semiconductor, Inc.
  *
  * See file CREDITS for list of people who contributed to this
  * project.
@@ -160,6 +161,7 @@ stack_setup:
 	ldr	r0, _TEXT_BASE		@ upper 128 KiB: relocated uboot
 	sub	r0, r0, #CONFIG_SYS_MALLOC_LEN @ malloc area
 	sub	r0, r0, #CONFIG_SYS_GBL_DATA_SIZE @ bdinfo
+	sub	r0, r0, #4		   /* CONFIG_SYS_POST_WORD_ADDR         */
 #ifdef CONFIG_USE_IRQ
 	sub	r0, r0, #(CONFIG_STACKSIZE_IRQ + CONFIG_STACKSIZE_FIQ)
 #endif
@@ -177,6 +179,9 @@ clbss_l:
 	add	r0, r0, #4		@ increment clear index pointer
 	bne	clbss_l			@ keep clearing till at end
 
+#ifdef CONFIG_ARCH_MMU
+	bl board_mmu_init
+#endif
 	ldr	pc, _start_armboot	@ jump to C code
 
 _start_armboot: .word start_armboot

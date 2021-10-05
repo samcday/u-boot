@@ -25,6 +25,9 @@ include $(TOPDIR)/config.mk
 
 LIB	:= $(obj)libi2c.a
 
+COBJS-$(CONFIG_MX35_I2C) += mx35_i2c.o
+COBJS-$(CONFIG_MX50_I2C) += mx50_i2c.o
+COBJS-$(CONFIG_MX51_I2C) += mx51_i2c.o
 COBJS-$(CONFIG_BFIN_TWI_I2C) += bfin-twi_i2c.o
 COBJS-$(CONFIG_DRIVER_DAVINCI_I2C) += davinci_i2c.o
 COBJS-$(CONFIG_FSL_I2C) += fsl_i2c.o

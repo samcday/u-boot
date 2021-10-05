@@ -27,6 +27,8 @@ LIB 	:= $(obj)libgpio.a
 
 COBJS-$(CONFIG_KIRKWOOD_GPIO)	+= kw_gpio.o
 COBJS-$(CONFIG_MX31_GPIO)	+= mx31_gpio.o
+COBJS-$(CONFIG_MX35_GPIO)	+= mx35_gpio.o
+COBJS-$(CONFIG_MX50_GPIO)	+= mx50_gpio.o
 COBJS-$(CONFIG_PCA953X)		+= pca953x.o
 
 COBJS	:= $(COBJS-y)

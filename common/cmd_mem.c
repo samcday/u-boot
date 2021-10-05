@@ -618,6 +618,9 @@ int do_mem_loopw (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 }
 #endif /* CONFIG_LOOPW */
 
+extern unsigned int get_dram_size(void);
+
+#if defined(CONFIG_SYS_ALT_MEMTEST) || defined(CONFIG_SYS_ORG_MEMTEST)
 /*
  * Perform a memory test. A more complete alternative test can be
  * configured using CONFIG_SYS_ALT_MEMTEST. The complete test loops until
@@ -626,7 +629,8 @@ int do_mem_loopw (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
 	vu_long	*addr, *start, *end;
-	ulong	val;
+	vu_long	pattern;
+	ulong	val, opt;
 	ulong	readback;
 	int     rcode = 0;
 	int iterations = 1;
@@ -636,7 +640,6 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	vu_long	len;
 	vu_long	offset;
 	vu_long	test_offset;
-	vu_long	pattern;
 	vu_long	temp;
 	vu_long	anti_pattern;
 	vu_long	num_words;
@@ -657,9 +660,10 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		0x00000055,	/* four non-adjacent bits */
 		0xaaaaaaaa,	/* alternating 1/0 */
 	};
-#else
+#endif
+
+#if defined(CONFIG_SYS_ORG_MEMTEST)
 	ulong	incr;
-	ulong	pattern;
 #endif
 
 	if (argc > 1)
@@ -682,7 +686,15 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	else
 		iteration_limit = 0;
 
+	if (argc > 5)
+		opt = (ulong)simple_strtoul(argv[5], NULL, 16);
+	else
+		opt = 0;
+
 #if defined(CONFIG_SYS_ALT_MEMTEST)
+#if defined(CONFIG_SYS_ORG_MEMTEST)
+	if (opt>1) { /* Newer data, address and integrity test */
+#endif
 	printf ("Testing %08x ... %08x:\n", (uint)start, (uint)end);
 	PRINTF("%s:%d: start 0x%p end 0x%p\n",
 		__FUNCTION__, __LINE__, start, end);
@@ -695,12 +707,12 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 
 
 		if (iteration_limit && iterations > iteration_limit) {
-			printf("Tested %d iteration(s) without errors.\n",
-				iterations-1);
+			printf("\n(%ld) Tested %d iteration(s) without errors.\n",
+				get_timer(0)/(CONFIG_SYS_HZ/1000), iterations-1);
 			return 0;
 		}
 
-		printf("Iteration: %6d\r", iterations);
+		printf("\r(%ld) Iteration: %6d", get_timer(0)/(CONFIG_SYS_HZ/1000), iterations);
 		PRINTF("\n");
 		iterations++;
 
@@ -721,6 +733,7 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		 * '0's and '0' bits through a field of '1's (i.e.
 		 * pattern and ~pattern).
 		 */
+		puts (" Data");
 		addr = start;
 		for (j = 0; j < sizeof(bitpattern)/sizeof(bitpattern[0]); j++) {
 		    val = bitpattern[j];
@@ -782,6 +795,7 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		pattern = (vu_long) 0xaaaaaaaa;
 		anti_pattern = (vu_long) 0x55555555;
 
+		puts (" Address");
 		PRINTF("%s:%d: length = 0x%.8lx\n",
 			__FUNCTION__, __LINE__,
 			len);
@@ -828,6 +842,7 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		    }
 		    start[test_offset] = pattern;
 		}
+		if (opt<3) { /* only do integrity if opt < 3 */
 
 		/*
 		 * Description: Test the integrity of a physical
@@ -841,6 +856,7 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		 *
 		 * Returns:     0 if the test succeeds, 1 if the test fails.
 		 */
+		puts (" Integrity");
 		num_words = ((ulong)end - (ulong)start)/sizeof(vu_long) + 1;
 
 		/*
@@ -883,9 +899,13 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		    }
 		    start[offset] = 0;
 		}
+		}
 	}
-
-#else /* The original, quickie test */
+#if defined(CONFIG_SYS_ORG_MEMTEST)
+	} else {
+#endif
+#endif
+#if defined(CONFIG_SYS_ORG_MEMTEST) /* The original, quickie test */
 	incr = 1;
 	for (;;) {
 		if (ctrlc()) {
@@ -894,21 +914,23 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		}
 
 		if (iteration_limit && iterations > iteration_limit) {
-			printf("Tested %d iteration(s) without errors.\n",
-				iterations-1);
+			printf("\n(%ld) Tested %d iteration(s) without errors.\n",
+				get_timer(0)/(CONFIG_SYS_HZ/1000), iterations-1);
 			return 0;
 		}
 		++iterations;
 
-		printf ("\rPattern %08lX  Writing..."
+		printf ("\r(%ld) Pattern %08lX  Writing..."
 			"%12s"
 			"\b\b\b\b\b\b\b\b\b\b",
-			pattern, "");
+			get_timer(0)/(CONFIG_SYS_HZ/1000), pattern, "");
 
 		for (addr=start,val=pattern; addr<end; addr++) {
 			WATCHDOG_RESET();
 			*addr = val;
-			val  += incr;
+			if (opt<1) { /* not if diagonal data */
+			    val += incr;
+			}
 		}
 
 		puts ("Reading...");
@@ -922,9 +944,12 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 					(uint)addr, readback, val);
 				rcode = 1;
 			}
-			val += incr;
+			if (opt<1) { /* not if diagonal data */
+			    val += incr;
+			}
 		}
 
+		if (opt<1) {
 		/*
 		 * Flip the pattern each time to make lots of zeros and
 		 * then, the next time, lots of ones.  We decrement
@@ -933,16 +958,28 @@ int do_mem_mtest (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		 */
 		if(pattern & 0x80000000) {
 			pattern = -pattern;	/* complement & increment */
-		}
-		else {
+		} else {
 			pattern = ~pattern;
 		}
 		incr = -incr;
+		} else {
+		    /*
+			 * Increment the pattern diagonally to quickly find
+			 * stuck data bits, common on DDR style chips.
+			 */
+		    if (pattern == 0xFFFFFFFF) {
+			    pattern += 0x00000001; /* start back at 0's */
+			} else {
+			    pattern += 0x11111111;
+			}
+        }
+	}
+#if defined(CONFIG_SYS_ORG_MEMTEST)
 	}
 #endif
-	return rcode;
+#endif
 }
-
+#endif /* defined(CONFIG_SYS_ALT_MEMTEST) || defined(CONFIG_SYS_ORG_MEMTEST) */
 
 /* Modify memory.
  *
@@ -1247,11 +1284,19 @@ U_BOOT_CMD(
 );
 #endif /* CONFIG_LOOPW */
 
+#if defined(CONFIG_SYS_ALT_MEMTEST) || defined(CONFIG_SYS_ORG_MEMTEST)
 U_BOOT_CMD(
-	mtest,	5,	1,	do_mem_mtest,
+	mtest,	6,	1,	do_mem_mtest,
 	"simple RAM read/write test",
-	"[start [end [pattern [iterations]]]]"
+	"[start [end [pattern [iterations [option]]]]]\n"
+	"    - simple RAM read/write test\n"
+	"      options:\n"
+	"      0 - default, original (not so) quickie test\n"
+	"      1 - diagonal data pattern test\n"
+	"      2 - newer looping data, address and integrity test\n"
+	"      3 - only data and address test\n"
 );
+#endif /* defined(CONFIG_SYS_ALT_MEMTEST) || defined(CONFIG_SYS_ORG_MEMTEST) */
 
 #ifdef CONFIG_MX_CYCLIC
 U_BOOT_CMD(

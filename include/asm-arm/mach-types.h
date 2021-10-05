@@ -2241,6 +2241,7 @@ extern unsigned int __machine_arch_type;
 #define MACH_TYPE_OMAP3_WL_FF          2258
 #define MACH_TYPE_SIMCOM               2259
 #define MACH_TYPE_MCWEBIO              2260
+#define MACH_TYPE_MX50_ARM2            2955
 
 #ifdef CONFIG_ARCH_EBSA110
 # ifdef machine_arch_type

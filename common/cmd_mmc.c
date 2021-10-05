@@ -25,12 +25,19 @@
 #include <command.h>
 #include <mmc.h>
 
+#define MMC_TRANSFER_SIZE	65536
+
 #ifndef CONFIG_GENERIC_MMC
 static int curr_device = -1;
 
 int do_mmc (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
 	int dev;
+	unsigned int mem_addr;
+	unsigned int mmc_addr;
+	int length;
+	ulong st, end;
+	int err;
 
 	if (argc < 2) {
 		cmd_usage(cmdtp);
@@ -77,6 +84,51 @@ int do_mmc (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		}
 
 		printf("mmc%d is current device\n", curr_device);
+	} else if (strcmp(argv[1], "read") == 0) {
+
+	    if (argc != 5) {
+		printf("argc=%d\n", argc);
+
+		cmd_usage(cmdtp);
+		return 1;
+	    }
+	    
+	    mem_addr = (unsigned int)simple_strtoul(argv[2], NULL, 10);
+	    mmc_addr = (unsigned int)simple_strtoul(argv[3], NULL, 10);
+	    length = (int)simple_strtoul(argv[4], NULL, 10);
+	    
+	    printf("read from 0x%x to 0x%x, len=%d bytes\n", mmc_addr, mem_addr, length); 
+
+	    st = get_timer_masked();
+	    err = mmc_read(curr_device, mmc_addr, (unsigned char *) mem_addr, length);
+	    if (!err) {
+		end = get_timer_masked();
+		printf("read %d bytes in %ld msec\n", length, ((end - st) * 1000) / CONFIG_SYS_HZ);
+	    } else {
+		printf("read error: %d\n", err);
+	    }
+	} else if (strcmp(argv[1], "write") == 0) {
+
+	    if (argc != 5) {
+		printf("argc=%d\n", argc);
+		cmd_usage(cmdtp);
+		return 1;
+	    }
+	    
+	    mem_addr = (unsigned int)simple_strtoul(argv[2], NULL, 10);
+	    mmc_addr = (unsigned int)simple_strtoul(argv[3], NULL, 10);
+	    length = (int)simple_strtoul(argv[4], NULL, 10);
+	    
+	    printf("write from 0x%x to 0x%x, len=%d bytes\n", mem_addr, mmc_addr, length); 
+
+	    st = get_timer_masked();
+	    err = mmc_write(curr_device, (unsigned char *) mem_addr, mmc_addr, length);
+	    if (!err) {
+		end = get_timer_masked();
+		printf("wrote %d bytes in %ld msec\n", length, ((end - st) * 1000) / CONFIG_SYS_HZ);
+	    } else {
+		printf("write error: %d\n", err);
+	    }
 	} else {
 		cmd_usage(cmdtp);
 		return 1;
@@ -86,12 +138,39 @@ int do_mmc (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 }
 
 U_BOOT_CMD(
-	mmc, 3, 1, do_mmc,
+	mmc, 5, 1, do_mmc,
 	"MMC sub-system",
 	"init [dev] - init MMC sub system\n"
 	"mmc device [dev] - show or set current device"
 );
 #else /* !CONFIG_GENERIC_MMC */
+
+#ifdef CONFIG_BOOT_PARTITION_ACCESS
+#define MMC_PARTITION_SWITCH(mmc, part, enable_boot) \
+	do { \
+		if (IS_SD(mmc)) {	\
+			if (part > 1)	{\
+				printf( \
+				"\nError: SD partition can only be 0 or 1\n");\
+				return 1;	\
+			}	\
+			if (sd_switch_partition(mmc, part) < 0) {	\
+				if (part > 0) { \
+					printf("\nError: Unable to switch SD "\
+					"partition\n");\
+					return 1;	\
+				}	\
+			}	\
+		} else {	\
+			if (mmc_switch_partition(mmc, part, enable_boot) \
+				< 0) {	\
+				printf("Error: Fail to switch "	\
+					"partition to %d\n", part);	\
+				return 1;	\
+			}	\
+		} \
+	} while (0)
+#endif
 
 static void print_mmcinfo(struct mmc *mmc)
 {
@@ -112,6 +191,59 @@ static void print_mmcinfo(struct mmc *mmc)
 	printf("Capacity: %lld\n", mmc->capacity);
 
 	printf("Bus Width: %d-bit\n", mmc->bus_width);
+#ifdef CONFIG_BOOT_PARTITION_ACCESS
+	if (mmc->boot_size_mult == 0) {
+		printf("Boot Partition Size: %s\n", "No boot partition available");
+	} else {
+		printf("Boot Partition Size: %5dKB\n", mmc->boot_size_mult * 128);
+
+		printf("Current Partition for boot: ");
+		switch (mmc->boot_config & EXT_CSD_BOOT_PARTITION_ENABLE_MASK) {
+		case EXT_CSD_BOOT_PARTITION_DISABLE:
+			printf("Not bootable\n");
+			break;
+		case EXT_CSD_BOOT_PARTITION_PART1:
+			printf("Boot partition 1\n");
+			break;
+		case EXT_CSD_BOOT_PARTITION_PART2:
+			printf("Boot partition 2\n");
+			break;
+		case EXT_CSD_BOOT_PARTITION_USER:
+			printf("User area\n");
+			break;
+		default:
+			printf("Unknown\n");
+			break;
+		}
+
+		printf("Current boot width: ");
+		switch (mmc->boot_bus_width & 0x3) {
+		  case EXT_CSD_BOOT_BUS_WIDTH_1BIT:
+		    printf("1-bit ");
+		    break;
+		  case EXT_CSD_BOOT_BUS_WIDTH_4BIT:
+		    printf("4-bit ");
+		    break;
+		  case EXT_CSD_BOOT_BUS_WIDTH_8BIT:
+		    printf("8-bit ");
+		  default:
+		    printf("Unknown ");
+		}
+
+		switch ((mmc->boot_bus_width >> 3) & 0x3) {
+		  case 0:
+		    printf("SDR\n");
+		    break;
+		  case EXT_CSD_BOOT_BUS_WIDTH_SDR_HS:
+		    printf("SDR High-speed\n");
+		    break;
+		  case EXT_CSD_BOOT_BUS_WIDTH_DDR:
+		    printf("DDR\n");
+		  default:
+		    printf("Unknown\n");
+		}
+	}
+#endif
 }
 
 int do_mmcinfo (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
@@ -127,22 +259,28 @@ int do_mmcinfo (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	mmc = find_mmc_device(dev_num);
 
 	if (mmc) {
-		mmc_init(mmc);
-
-		print_mmcinfo(mmc);
+		if (mmc_init(mmc))
+			puts("MMC card init failed!\n");
+		else
+			print_mmcinfo(mmc);
 	}
 
 	return 0;
 }
 
 U_BOOT_CMD(mmcinfo, 2, 0, do_mmcinfo,
-	"mmcinfo <dev num>-- display MMC info\n",
+	"mmcinfo <dev num>-- display MMC info",
 	""
 );
 
 int do_mmcops(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
 	int rc = 0;
+#ifdef CONFIG_BOOT_PARTITION_ACCESS
+	u32 part = 0;
+#endif
+	int err = 0;
+	ulong st, end, tm;
 
 	switch (argc) {
 	case 3:
@@ -156,6 +294,29 @@ int do_mmcops(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 			mmc_init(mmc);
 
 			return 0;
+		} else if (!strcmp(argv[1], "mmctest")) {
+
+		    int dev = simple_strtoul(argv[2], NULL, 10);
+		    struct mmc *mmc = find_mmc_device(dev);
+		    int num = 0;
+
+		    while(1) {
+			MMC_PARTITION_SWITCH(mmc, 1, 1);
+			err = mmc_read(dev, 0, (unsigned char *) 0x70000000, 512);
+			if (err)
+			    printf("err on read!\n");
+			MMC_PARTITION_SWITCH(mmc, 0, 0);
+			num++;
+
+			if (!(num % 1000))
+			    printf(".");
+			if (num > 30000) {
+			    printf("\n");
+			    num = 0;
+			}
+		    }
+
+		    return 0;
 		}
 
 	case 0:
@@ -170,53 +331,149 @@ int do_mmcops(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 			return 0;
 		}
 		return 1;
+#ifdef CONFIG_BOOT_PARTITION_ACCESS
+	case 7: /* Fall through */
+		part = simple_strtoul(argv[6], NULL, 10);
+#endif
 	default: /* at least 5 args */
 		if (strcmp(argv[1], "read") == 0) {
 			int dev = simple_strtoul(argv[2], NULL, 10);
 			void *addr = (void *)simple_strtoul(argv[3], NULL, 16);
-			u32 cnt = simple_strtoul(argv[5], NULL, 16);
-			u32 n;
 			u32 blk = simple_strtoul(argv[4], NULL, 16);
+			u32 cnt = simple_strtoul(argv[5], NULL, 16);
+			u32 len, read, rdlen;
+
 			struct mmc *mmc = find_mmc_device(dev);
-
 			if (!mmc)
-				return 1;
+			    return 1;
 
-			printf("\nMMC read: dev # %d, block # %d, count %d ... ",
-				dev, blk, cnt);
+			err = mmc_init(mmc);
+			if (err) {
+			    printf("MMC read error initing mmc %d\n", dev);
+			    return err;
+			}
 
-			mmc_init(mmc);
 
-			n = mmc->block_dev.block_read(dev, blk, cnt, addr);
+#ifdef CONFIG_BOOT_PARTITION_ACCESS
+			printf("\nMMC read: dev # %d, block # %d, "
+				"count %d partition # %d ... \n",
+				dev, blk, cnt, part);
+#else
+			printf("\nMMC read: dev # %d, flashaddr=0x%x, size %d ... ",
+			       dev, blk, (cnt * mmc->read_bl_len));
+#endif
 
-			/* flush cache after read */
-			flush_cache((ulong)addr, cnt * 512); /* FIXME */
+#ifdef CONFIG_BOOT_PARTITION_ACCESS
+			if (((mmc->boot_config &
+				EXT_CSD_BOOT_PARTITION_ACCESS_MASK) != part)
+				|| IS_SD(mmc)) {
+				/*
+				 * After mmc_init, we now know whether
+				 * this is a eSD/eMMC which support boot
+				 * partition
+				 */
+				MMC_PARTITION_SWITCH(mmc, part, 0);
+			}
+#endif
 
-			printf("%d blocks read: %s\n",
-				n, (n==cnt) ? "OK" : "ERROR");
-			return (n == cnt) ? 0 : 1;
+			st = get_timer_masked();
+
+			len = cnt * mmc->read_bl_len;
+			read = 0;
+			// 64k transfers are optimal
+			while (len && !err) {
+			    rdlen = MIN(MMC_TRANSFER_SIZE, len); 
+			    err = mmc_read(dev, blk + read, addr + read, rdlen);
+			    read += rdlen;
+			    len -= rdlen;
+			}
+			
+			if (!err) {
+			    end = get_timer_masked();
+
+			    tm = (end - st) / 1000;
+			    printf("read %d blocks in %ld msec\n", cnt, tm);
+
+#if 0 // BEN DEBUG
+			    {
+				int i;
+				
+				for (i = 0; i < read; i++) {
+				    if (!(i%16)) printf("\n%08x: ", addr + i);
+				    printf("%02x ", ((u8 *) addr)[i]);
+				}
+				printf("\n");
+			    }
+#endif
+			} else {
+			    printf("read error: %d\n", err);
+			}
+
+			
+
+			return err;
+
 		} else if (strcmp(argv[1], "write") == 0) {
 			int dev = simple_strtoul(argv[2], NULL, 10);
 			void *addr = (void *)simple_strtoul(argv[3], NULL, 16);
+			u32 blk = simple_strtoul(argv[4], NULL, 16);
 			u32 cnt = simple_strtoul(argv[5], NULL, 16);
-			u32 n;
+			u32 len, written, wrlen;
+
 			struct mmc *mmc = find_mmc_device(dev);
-
-			int blk = simple_strtoul(argv[4], NULL, 16);
-
 			if (!mmc)
-				return 1;
+			    return 1;
 
-			printf("\nMMC write: dev # %d, block # %d, count %d ... ",
-				dev, blk, cnt);
+			err = mmc_init(mmc);
+			if (err) {
+			    printf("MMC write error initing mmc %d\n", dev);
+			    return err;
+			}
 
-			mmc_init(mmc);
+#ifdef CONFIG_BOOT_PARTITION_ACCESS
+			printf("\nMMC write: dev # %d, block # %d, "
+				"count %d, partition # %d ... \n",
+				dev, blk, cnt, part);
+#else
+		printf("\nMMC write: dev # %d, flashaddr=0x%x, size %d ... ",
+			       dev, blk, (cnt * mmc->write_bl_len));
+#endif
 
-			n = mmc->block_dev.block_write(dev, blk, cnt, addr);
+#ifdef CONFIG_BOOT_PARTITION_ACCESS
+			if (((mmc->boot_config &
+				EXT_CSD_BOOT_PARTITION_ACCESS_MASK) != part)
+				|| IS_SD(mmc)) {
+				/*
+				 * After mmc_init, we now know whether this is a
+				 * eSD/eMMC which support boot partition
+				 */
+				MMC_PARTITION_SWITCH(mmc, part, 1);
+			}
+#endif
 
-			printf("%d blocks written: %s\n",
-				n, (n == cnt) ? "OK" : "ERROR");
-			return (n == cnt) ? 0 : 1;
+			st = get_timer_masked();
+
+			len = cnt * mmc->write_bl_len;
+			written = 0;
+			// 64k transfers are optimal
+			while (len && !err) {
+			    wrlen = MIN(MMC_TRANSFER_SIZE, len); 
+			    err = mmc_write(dev, addr + written, blk + written, wrlen);
+			    written += wrlen;
+			    len -= wrlen;
+			}
+			
+			if (!err) {
+			    end = get_timer_masked();
+
+			    tm = (end - st) / 1000;
+			    printf("wrote %d blocks in %ld msec\n", cnt, tm);
+			} else {
+			    printf("write error: %d\n", err);
+			}
+
+			return err;
+
 		} else {
 			printf("Usage:\n%s\n", cmdtp->usage);
 			rc = 1;
@@ -226,11 +483,21 @@ int do_mmcops(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	}
 }
 
+#ifndef CONFIG_BOOT_PARTITION_ACCESS
 U_BOOT_CMD(
-	mmc, 6, 1, do_mmcops,
+	mmc, 7, 1, do_mmcops,
 	"MMC sub system",
-	"read <device num> addr blk# cnt\n"
+	"mmc read <device num> addr blk# cnt\n"
 	"mmc write <device num> addr blk# cnt\n"
 	"mmc rescan <device num>\n"
 	"mmc list - lists available devices");
+#else
+U_BOOT_CMD(
+	mmc, 7, 1, do_mmcops,
+	"MMC sub system",
+	"mmc read <device num> addr blk# cnt [partition]\n"
+	"mmc write <device num> addr blk# cnt [partition]\n"
+	"mmc rescan <device num>\n"
+	"mmc list - lists available devices");
+#endif
 #endif

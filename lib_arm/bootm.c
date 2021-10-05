@@ -34,6 +34,7 @@ DECLARE_GLOBAL_DATA_PTR;
     defined (CONFIG_INITRD_TAG) || \
     defined (CONFIG_SERIAL_TAG) || \
     defined (CONFIG_REVISION_TAG) || \
+    defined (CONFIG_POST_TAG) || \
     defined (CONFIG_VFD) || \
     defined (CONFIG_LCD)
 static void setup_start_tag (bd_t *bd);
@@ -48,6 +49,14 @@ static void setup_initrd_tag (bd_t *bd, ulong initrd_start,
 			      ulong initrd_end);
 # endif
 static void setup_end_tag (bd_t *bd);
+
+#ifdef CONFIG_POST_TAG
+void setup_post_tag (struct tag **params);
+#endif
+
+#ifdef CONFIG_MACADDR_TAG
+void setup_macaddr_tag (struct tag **params);
+#endif
 
 # if defined (CONFIG_VFD) || defined (CONFIG_LCD)
 static void setup_videolfb_tag (gd_t *gd);
@@ -88,14 +97,33 @@ int do_bootm_linux(int flag, int argc, char *argv[], bootm_headers_t *images)
     defined (CONFIG_INITRD_TAG) || \
     defined (CONFIG_SERIAL_TAG) || \
     defined (CONFIG_REVISION_TAG) || \
+    defined (CONFIG_POST_TAG) || \
     defined (CONFIG_LCD) || \
     defined (CONFIG_VFD)
 	setup_start_tag (bd);
 #ifdef CONFIG_SERIAL_TAG
 	setup_serial_tag (&params);
 #endif
+#ifdef CONFIG_SERIAL16_TAG
+	setup_serial16_tag (&params);
+#endif
+#ifdef CONFIG_SERIAL20_TAG
+	setup_serial20_tag (&params);
+#endif
+#ifdef CONFIG_BOOTMODE_TAG
+	setup_bootmode_tag (&params);
+#endif
 #ifdef CONFIG_REVISION_TAG
 	setup_revision_tag (&params);
+#endif
+#ifdef CONFIG_REVISION16_TAG
+	setup_revision16_tag (&params);
+#endif
+#ifdef CONFIG_MACADDR_TAG
+	setup_macaddr_tag (&params);
+#endif
+#ifdef CONFIG_POST_TAG
+	setup_post_tag (&params);
 #endif
 #ifdef CONFIG_SETUP_MEMORY_TAGS
 	setup_memory_tags (bd);
@@ -114,7 +142,7 @@ int do_bootm_linux(int flag, int argc, char *argv[], bootm_headers_t *images)
 #endif
 
 	/* we assume that the kernel is in place */
-	printf ("\nStarting kernel ...\n\n");
+	printf ("Starting kernel ...\n");
 
 #ifdef CONFIG_USB_DEVICE
 	{
@@ -136,7 +164,12 @@ int do_bootm_linux(int flag, int argc, char *argv[], bootm_headers_t *images)
     defined (CONFIG_CMDLINE_TAG) || \
     defined (CONFIG_INITRD_TAG) || \
     defined (CONFIG_SERIAL_TAG) || \
+    defined (CONFIG_SERIAL16_TAG) || \
+    defined (CONFIG_SERIAL20_TAG) || \
+    defined (CONFIG_BOOTMODE_TAG) || \
     defined (CONFIG_REVISION_TAG) || \
+    defined (CONFIG_REVISION16_TAG) || \
+    defined (CONFIG_POST_TAG) || \
     defined (CONFIG_LCD) || \
     defined (CONFIG_VFD)
 static void setup_start_tag (bd_t *bd)
@@ -255,6 +288,42 @@ void setup_serial_tag (struct tag **tmp)
 }
 #endif
 
+#ifdef CONFIG_SERIAL16_TAG
+extern const u8 *get_board_serial(void);
+
+/* 16-byte serial number tag (alphanumeric string) */
+void setup_serial16_tag(struct tag **in_params)
+{
+	const u8 *sn = 0;
+
+	sn = get_board_serial();
+	if (!sn)
+		return; /* ignore if NULL was returned. */
+	params->hdr.tag = ATAG_SERIAL16;
+	params->hdr.size = tag_size (tag_id16);
+	memcpy(params->u.id16.data, sn, sizeof params->u.id16.data);
+	params = tag_next (params);
+}
+#endif  /* CONFIG_SERIAL16_TAG */
+
+#ifdef CONFIG_SERIAL20_TAG
+extern const u8 *get_board_serial(void);
+
+/* 20-byte serial number tag (alphanumeric string) */
+void setup_serial20_tag(struct tag **in_params)
+{
+	const u8 *sn = 0;
+
+	sn = get_board_serial();
+	if (!sn)
+		return; /* ignore if NULL was returned. */
+	params->hdr.tag = ATAG_SERIAL20;
+	params->hdr.size = tag_size (tag_id20);
+	memcpy(params->u.id20.data, sn, sizeof params->u.id20.data);
+	params = tag_next (params);
+}
+#endif  /* CONFIG_SERIAL20_TAG */
+
 #ifdef CONFIG_REVISION_TAG
 void setup_revision_tag(struct tag **in_params)
 {
@@ -269,6 +338,95 @@ void setup_revision_tag(struct tag **in_params)
 }
 #endif  /* CONFIG_REVISION_TAG */
 
+#ifdef CONFIG_REVISION16_TAG
+extern const u8 *get_board_id16(void);
+
+/* 16-byte revision tag (alphanumeric string) */
+void setup_revision16_tag(struct tag **in_params)
+{
+	const u8 *rev = 0;
+
+	rev = get_board_id16();
+	if (!rev)
+		return; /* ignore if NULL was returned. */
+	params->hdr.tag = ATAG_REVISION16;
+	params->hdr.size = tag_size (tag_id16);
+	memcpy (params->u.id16.data, rev, sizeof params->u.id16.data);
+	params = tag_next (params);
+}
+#endif  /* CONFIG_REVISION16_TAG */
+
+#ifdef CONFIG_MACADDR_TAG
+#ifdef CONFIG_CMD_IDME
+#include <idme.h>
+#endif
+
+/* MAC address/secret tag (alphanumeric strings) */
+void setup_macaddr_tag(struct tag **in_params)
+{
+#ifdef CONFIG_CMD_IDME    
+    char mac_buf[12+1];
+    char sec_buf[20+1];
+    
+    if (idme_get_var("mac", mac_buf, sizeof(mac_buf)))
+	return;
+
+    if (idme_get_var("sec", sec_buf, sizeof(sec_buf)))
+	return;
+
+    params->hdr.tag = ATAG_MACADDR;
+    params->hdr.size = tag_size (tag_macaddr);
+    memcpy (params->u.macaddr.address, mac_buf, sizeof params->u.macaddr.address);
+    memcpy (params->u.macaddr.secret, sec_buf, sizeof params->u.macaddr.secret);
+	
+    params = tag_next (params);
+#endif
+
+}
+#endif  /* CONFIG_MACADDR_TAG */
+
+#ifdef CONFIG_BOOTMODE_TAG
+#ifdef CONFIG_CMD_IDME
+#include <idme.h>
+#endif
+
+/* bootmode tag (alphanumeric strings) */
+void setup_bootmode_tag(struct tag **in_params)
+{
+#ifdef CONFIG_CMD_IDME    
+    char bootmode_buf[16+1];
+    char postmode_buf[16+1];
+    
+    if (idme_get_var("bootmode", bootmode_buf, sizeof(bootmode_buf)))
+	return;
+
+    if (idme_get_var("postmode", postmode_buf, sizeof(postmode_buf)))
+	return;
+
+    params->hdr.tag = ATAG_BOOTMODE;
+    params->hdr.size = tag_size (tag_bootmode);
+    memcpy (params->u.bootmode.boot, bootmode_buf, sizeof params->u.bootmode.boot);
+    memcpy (params->u.bootmode.post, postmode_buf, sizeof params->u.bootmode.post);
+	
+    params = tag_next (params);
+#endif
+
+}
+#endif  /* CONFIG_BOOTMODE_TAG */
+
+#ifdef CONFIG_POST_TAG
+void setup_post_tag (struct tag **in_params)
+{
+	params->hdr.tag = ATAG_POST;
+	params->hdr.size = tag_size (tag_post);
+	if (gd->flags & GD_FLG_POSTWARN) {
+	    params->u.post.failure = 1;
+	} else {
+	    params->u.post.failure = 0;
+	}
+	params = tag_next (params);
+}
+#endif  /* CONFIG_POST_TAG */
 
 static void setup_end_tag (bd_t *bd)
 {

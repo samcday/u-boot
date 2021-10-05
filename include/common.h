@@ -112,6 +112,10 @@ typedef volatile unsigned char	vu_char;
 #include <flash.h>
 #include <image.h>
 
+#if defined(CONFIG_HANG_FEEDBACK)
+void hang_feedback (void);
+#endif
+
 #ifdef	DEBUG
 #define debug(fmt,args...)	printf (fmt ,##args)
 #define debugX(level,fmt,args...) if (DEBUG>=level) printf(fmt,##args);
