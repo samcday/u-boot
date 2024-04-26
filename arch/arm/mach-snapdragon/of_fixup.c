@@ -106,6 +106,8 @@ static void fixup_usb_nodes(void)
 	struct device_node *glue_np = NULL;
 	int ret;
 
+	return;
+
 	while ((glue_np = of_find_compatible_node(glue_np, NULL, "qcom,dwc3"))) {
 		ret = fixup_qcom_dwc3(glue_np);
 		if (ret)
