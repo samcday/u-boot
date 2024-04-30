@@ -235,6 +235,11 @@ config SYSRESET_RAA215300
 	help
 	  Add support for the system reboot via the Renesas RAA215300 PMIC.
 
+config SYSRESET_MSM
+	bool "Enable support for Qualcomm MSM reboot driver"
+	help
+	  Reboot support for Qualcomm MSM SoCs.
+
 endif
 
 endmenu
