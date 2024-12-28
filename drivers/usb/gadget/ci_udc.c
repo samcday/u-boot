@@ -387,6 +387,9 @@ static int ci_ep_disable(struct usb_ep *ep)
 	struct ci_ep *ci_ep = container_of(ep, struct ci_ep, ep);
 	int num, in, err;
 
+	if (!ep->desc)
+		return 0;
+
 	num = ci_ep->desc->bEndpointAddress & USB_ENDPOINT_NUMBER_MASK;
 	in = (ci_ep->desc->bEndpointAddress & USB_DIR_IN) != 0;
 
