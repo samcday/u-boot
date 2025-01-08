@@ -154,8 +154,6 @@ static int calc_csr_bitrate(struct msm_serial_data *priv)
 
 static void uart_dm_init(struct msm_serial_data *priv)
 {
-	/* Delay initialization for a bit to let pins stabilize if necessary */
-	mdelay(5);
 	int bitrate = calc_csr_bitrate(priv);
 	if (bitrate < 0) {
 		log_warning("Couldn't calculate bit clock divider! Using default\n");
