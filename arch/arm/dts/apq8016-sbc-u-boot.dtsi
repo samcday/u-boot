@@ -16,5 +16,10 @@
  * during all boot stages.
  */
 &blsp_uart2_default {
-	bootph-all;
+	tx-pins {
+		bootph-all;
+	};
+	rx-pins {
+		bootph-all;
+	};
 };
