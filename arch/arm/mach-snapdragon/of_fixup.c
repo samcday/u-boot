@@ -143,7 +143,41 @@ static void fixup_power_domains(void)
 	}
 }
 
-#define time_call(func, ...) \
+#if CONFIG_IS_ENABLED(VIDEO_QCOM_MDP)
+/* remove IOMMU + PD references from display subsystem + controller,
+ * this is necessary for the minimal mdp5 video driver to work. The
+ * removal of power-domains isn't strictly necessary as that can be
+ * worked around with the DM_FLAG_DEFAULT_PD_CTRL_OFF flag, but no
+ * similar workaround exists for the iommu reference. So we just do
+ * both here, for now */
+static void fixup_mdss_mdp(void)
+{
+	struct device_node *np = NULL;
+	struct property *prop;
+
+	np = of_find_compatible_node(np, NULL, "qcom,mdss");
+	if (np == NULL)
+		return;
+
+	prop = of_find_property(np, "power-domains", NULL);
+	if (prop != NULL && of_remove_property(np, prop) < 0) {
+		log_err("Failed to remove power-domains prop from mdss node");
+		return;
+	}
+
+	np = of_find_compatible_node(np, NULL, "qcom,mdp5");
+	if (np == NULL)
+		return;
+
+	prop = of_find_property(np, "iommus", NULL);
+	if (prop != NULL && of_remove_property(np, prop) < 0) {
+		log_err("Failed to remove iommus prop from mdp5 node");
+		return;
+	}
+}
+#endif
+
+ #define time_call(func, ...) \
 	do { \
 		u64 start = timer_get_us(); \
 		func(__VA_ARGS__); \
@@ -154,6 +188,9 @@ void qcom_of_fixup_nodes(void)
 {
 	time_call(fixup_usb_nodes);
 	time_call(fixup_power_domains);
+#if CONFIG_IS_ENABLED(VIDEO_QCOM_MDP)
+	time_call(fixup_mdss_mdp);
+#endif
 }
 
 int ft_board_setup(void *blob, struct bd_info __maybe_unused *bd)
