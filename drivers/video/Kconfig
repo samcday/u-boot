@@ -881,6 +881,14 @@ config VIDEO_DW_MIPI_DSI
 	  rather requires a SoC-specific glue driver to call it), it
 	  can not be enabled from the configuration menu.
 
+config VIDEO_QCOM_MDP
+	bool "Enable support for Qualcomm Mobile Display Processor"
+	help
+	  Enables a simple driver which will discover and use an MDP pipe.
+
+	  Currently, this driver only supports MDP5 pipes, and the pipe must
+	  already have been configured, presumably by the vendor bootloader.
+
 config VIDEO_SIMPLE
 	bool "Simple display driver for preconfigured display"
 	help
