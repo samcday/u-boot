@@ -1,0 +1,3 @@
+&mdss {
+	status = "okay";
+};
