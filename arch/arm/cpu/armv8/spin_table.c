@@ -6,6 +6,7 @@
 
 #include <linux/libfdt.h>
 #include <asm/spin_table.h>
+#include <errno.h>
 
 int spin_table_update_dt(void *fdt)
 {
