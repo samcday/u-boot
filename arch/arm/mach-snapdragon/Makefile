@@ -6,3 +6,4 @@ obj-y += board.o
 obj-y += qcom-scm.o
 obj-$(CONFIG_EFI_HAVE_CAPSULE_SUPPORT) += capsule_update.o
 obj-$(CONFIG_OF_LIVE) += of_fixup.o
+obj-$(CONFIG_ARMV8_SPIN_TABLE) += msm8916-smp.o
