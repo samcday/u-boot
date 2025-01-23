@@ -16,4 +16,8 @@ void qcom_configure_capsule_updates(void);
 void qcom_of_fixup_nodes(void);
 #endif /* OF_LIVE */
 
+#if CONFIG_IS_ENABLED(ARMV8_SPIN_TABLE)
+void apq8016_smp_setup(void);
+#endif /* CONFIG_IS_ENABLED(ARMV8_SPIN_TABLE) */
+
 #endif /* __QCOM_PRIV_H__ */

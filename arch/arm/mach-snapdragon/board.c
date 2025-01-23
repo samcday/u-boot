@@ -275,6 +275,9 @@ int board_init(void)
 	qcom_of_fixup_nodes();
 	#endif
 	qcom_board_init();
+	#if CONFIG_IS_ENABLED(ARMV8_SPIN_TABLE)
+	apq8016_smp_setup();
+	#endif
 	return 0;
 }
 
