@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2025 Sam Day
+ */
+
+&CPU0 {
+	enable-method = "spin-table";
+};
+
+&CPU1 {
+	enable-method = "spin-table";
+};
+
+&CPU2 {
+	enable-method = "spin-table";
+};
+
+&CPU3 {
+	enable-method = "spin-table";
+};

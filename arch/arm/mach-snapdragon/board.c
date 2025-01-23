@@ -273,6 +273,8 @@ int board_init(void)
 	show_psci_version();
 	qcom_of_fixup_nodes();
 	qcom_board_init();
+	extern void apq8016_smp_setup(void);
+	apq8016_smp_setup();
 	return 0;
 }
 
