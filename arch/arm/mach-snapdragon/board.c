@@ -306,7 +306,9 @@ void __weak qcom_board_init(void)
 int board_init(void)
 {
 	show_psci_version();
+	#if CONFIG_IS_ENABLED(OF_LIVE)
 	qcom_of_fixup_nodes();
+	#endif
 	qcom_board_init();
 	return 0;
 }
@@ -517,7 +519,9 @@ int board_late_init(void)
 	qcom_late_init();
 
 	/* Configure the dfu_string for capsule updates */
+	#if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
 	qcom_configure_capsule_updates();
+	#endif
 
 	return 0;
 }
