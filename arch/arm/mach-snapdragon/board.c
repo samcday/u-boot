@@ -576,7 +576,9 @@ int board_late_init(void)
 
 	qcom_show_boot_source();
 	/* Configure the dfu_string for capsule updates */
+#if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
 	qcom_configure_capsule_updates();
+#endif
 
 	return 0;
 }

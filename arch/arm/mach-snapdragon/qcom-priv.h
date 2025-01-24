@@ -19,8 +19,6 @@ extern enum qcom_boot_source qcom_boot_source;
 
 #if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
 void qcom_configure_capsule_updates(void);
-#else
-void qcom_configure_capsule_updates(void) {}
 #endif /* EFI_HAVE_CAPSULE_SUPPORT */
 
 #endif /* __QCOM_PRIV_H__ */
