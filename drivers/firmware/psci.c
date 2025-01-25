@@ -74,7 +74,7 @@ static int request_psci_features(u32 psci_func_id)
 			      psci_func_id, 0, 0);
 }
 
-static u32 psci_0_2_get_version(void)
+u32 psci_0_2_get_version(void)
 {
 	return invoke_psci_fn(PSCI_0_2_FN_PSCI_VERSION, 0, 0, 0);
 }
@@ -82,7 +82,7 @@ static u32 psci_0_2_get_version(void)
 static bool psci_is_system_reset2_supported(void)
 {
 	int ret;
-	u32 ver;
+	int ver;
 
 	ver = psci_0_2_get_version();
 

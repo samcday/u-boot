@@ -158,13 +158,11 @@ static int qcom_parse_memory(const void *fdt)
 
 static void show_psci_version(void)
 {
-	struct arm_smccc_res res;
+	u32 ver = psci_0_2_get_version();
 
-	arm_smccc_smc(ARM_PSCI_0_2_FN_PSCI_VERSION, 0, 0, 0, 0, 0, 0, 0, &res);
-
-	debug("PSCI:  v%ld.%ld\n",
-	      PSCI_VERSION_MAJOR(res.a0),
-	      PSCI_VERSION_MINOR(res.a0));
+	printf("PSCI:  v%ld.%ld\n",
+	       PSCI_VERSION_MAJOR(ver),
+	       PSCI_VERSION_MINOR(ver));
 }
 
 /* We support booting U-Boot with an internal DT when running as a first-stage bootloader

@@ -165,13 +165,11 @@ void hikey960_sd_init(void)
 
 static void show_psci_version(void)
 {
-	struct arm_smccc_res res;
-
-	arm_smccc_smc(ARM_PSCI_0_2_FN_PSCI_VERSION, 0, 0, 0, 0, 0, 0, 0, &res);
+	u32 ver = psci_0_2_get_version();
 
 	printf("PSCI:  v%ld.%ld\n",
-	       PSCI_VERSION_MAJOR(res.a0),
-		PSCI_VERSION_MINOR(res.a0));
+	       PSCI_VERSION_MAJOR(ver),
+	       PSCI_VERSION_MINOR(ver));
 }
 
 int board_init(void)
