@@ -47,5 +47,14 @@ config ARM_SMCCC_FEATURES
 	  the PSCI driver is always probed and binds dirvers registered to the Arm SMCCC
 	  services if any and reported as supported by the SMCCC firmware.
 
+config QCOM_SCM
+	bool "Qualcomm Secure Channel Manager"
+	depends on ARM_SMCCC
+	select FIRMWARE
+	help
+	  Enable support for Qualcomm Secure Channel Manager calls. These
+	  calls are used to ask the platform firmware to perform operations
+	  such as configuring secondary CPU boot addresses.
+
 source "drivers/firmware/arm-ffa/Kconfig"
 source "drivers/firmware/scmi/Kconfig"
