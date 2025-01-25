@@ -160,6 +160,11 @@ static void show_psci_version(void)
 {
 	u32 ver = psci_0_2_get_version();
 
+	/* MSM8916 shipped many devices without a PSCI implementation.
+	 * Displaying "PSCI: 65535.65528" isn't useful */
+	if (ver & BIT(31))
+		return;
+
 	printf("PSCI:  v%ld.%ld\n",
 	       PSCI_VERSION_MAJOR(ver),
 	       PSCI_VERSION_MINOR(ver));
