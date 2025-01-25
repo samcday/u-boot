@@ -63,7 +63,7 @@ static int qcom_scm_call(const struct qcom_scm_desc *desc,
 			 struct qcom_scm_res *res)
 {
 	int arglen = desc->arginfo & 0xf;
-	__le32 *args = NULL;
+	void *args = NULL;
 	int i, ret;
 	struct arm_smccc_args smc = {0};
 	struct arm_smccc_res smc_res;
@@ -90,7 +90,7 @@ static int qcom_scm_call(const struct qcom_scm_desc *desc,
 				args32[i] = cpu_to_le32(desc->args[i +
 							SCM_SMC_FIRST_EXT_IDX]);
 		} else {
-			__le32 *args64 = args;
+			__le64 *args64 = args;
 			for (i = 0; i < SCM_SMC_N_EXT_ARGS; i++)
 				args64[i] = cpu_to_le64(desc->args[i +
 							SCM_SMC_FIRST_EXT_IDX]);
@@ -133,7 +133,7 @@ int qcom_scm_set_boot_addr_mc(void *entry, unsigned int flags)
 		},
 	};
 
-	return qcom_scm_call(&desc, ARM_SMCCC_SMC_32, NULL);
+	return qcom_scm_call(&desc, SMC_CONVENTION_ARM_32, NULL);
 }
 
 bool qcom_scm_is_call_available(u32 svc_id, u32 cmd_id)
@@ -152,7 +152,7 @@ bool qcom_scm_is_call_available(u32 svc_id, u32 cmd_id)
 				SCM_SMC_FNID(svc_id, cmd_id))
 		},
 	};
-	if (qcom_scm_call(&desc, ARM_SMCCC_SMC_32, &scm_ret))
+	if (qcom_scm_call(&desc, SMC_CONVENTION_ARM_32, &scm_ret))
 		return false;
 	return scm_ret.result[0];
 }
