@@ -142,6 +142,13 @@ static int pm8916_pon_bind(struct udevice *dev)
 			dev_warn(dev, "failed to bind qcom_pwrkey: %d\n", ret);
 	}
 
+	if (CONFIG_IS_ENABLED(DM_REBOOT_MODE)) {
+		ret = device_bind_driver_to_node(dev, "pm8916_pon_reboot_mode",
+						 "reboot_mode", dev_ofnode(dev), NULL);
+		if (ret)
+			dev_warn(dev, "failed to bind reboot_mode: %d\n", ret);
+	}
+
 	return 0;
 }
 

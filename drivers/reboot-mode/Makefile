@@ -8,3 +8,4 @@ obj-$(CONFIG_DM_REBOOT_MODE) += reboot-mode-uclass.o
 obj-$(CONFIG_DM_REBOOT_MODE_GPIO) += reboot-mode-gpio.o
 obj-$(CONFIG_DM_REBOOT_MODE_RTC) += reboot-mode-rtc.o
 obj-$(CONFIG_REBOOT_MODE_NVMEM) += reboot-mode-nvmem.o
+obj-$(CONFIG_PM8916_PON) += reboot-mode-pm8916-pon.o
