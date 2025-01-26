@@ -464,7 +464,7 @@ config PM8916_PON
     depends on CONFIG_PMIC_QCOM
 	help
 	  The PM8916 PMIC is a multifunction device that handles pwr/resin buttons,
-	  reboot reason (soft/hard/poweroff) and reboot mode (recovery/bootloader).
+	  reboot type (soft/hard/poweroff) and reboot mode (recovery/bootloader).
 
 config STM32MP_FUSE
 	bool "Enable STM32MP fuse wrapper providing the fuse API"

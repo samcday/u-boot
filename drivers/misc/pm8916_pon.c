@@ -3,7 +3,7 @@
  * Qualcomm PM8916 PON glue driver
  *
  * The PON device handles pwrkey/resin buttons, as well as setting reboot
- * reason and reboot mode. This glue driver binds the respective drivers.
+ * type and reboot mode. This glue driver binds the respective drivers.
  *
  * (C) Copyright 2025 Linaro Ltd.
  */
