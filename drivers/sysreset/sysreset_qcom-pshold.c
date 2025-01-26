@@ -13,6 +13,8 @@
 #include <sysreset.h>
 #include <asm/io.h>
 #include <linux/delay.h>
+#include <dm/device_compat.h>
+#include "pm8916_pon.h"
 
 struct qcom_pshold_priv {
 	phys_addr_t base;
@@ -21,6 +23,12 @@ struct qcom_pshold_priv {
 static int qcom_pshold_request(struct udevice *dev, enum sysreset_t type)
 {
 	struct qcom_pshold_priv *priv = dev_get_priv(dev);
+
+#if CONFIG_IS_ENABLED(PM8916_PON)
+	int ret = pm8916_pon_set_reboot_type(type);
+	if (ret)
+		dev_err(dev, "Failed to set reboot type: %d\n", ret);
+#endif
 
 	writel(0, priv->base);
 	mdelay(10000);
