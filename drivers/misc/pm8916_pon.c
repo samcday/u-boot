@@ -28,12 +28,6 @@
 #define PON_PS_HOLD_TYPE_SHUTDOWN	4
 #define PON_PS_HOLD_TYPE_HARD_RESET	7
 
-struct pm8916_pon_priv {
-	struct udevice *pmic;
-	phys_addr_t base;
-	u32 revision;
-};
-
 int pm8916_pon_set_reboot_type(enum sysreset_t reset_type)
 {
 	struct udevice *dev;
