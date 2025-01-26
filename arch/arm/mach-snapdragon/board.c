@@ -20,6 +20,7 @@
 #include <dm/read.h>
 #include <power/regulator.h>
 #include <env.h>
+#include <fastboot.h>
 #include <fdt_support.h>
 #include <init.h>
 #include <linux/arm-smccc.h>
@@ -304,6 +305,36 @@ void __weak qcom_board_init(void)
 {
 }
 
+#if CONFIG_IS_ENABLED(FASTBOOT) && CONFIG_IS_ENABLED(DM_REBOOT_MODE)
+int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
+{
+	const char *mode;
+	struct udevice *dev;
+	int ret;
+
+	switch (reason) {
+	case FASTBOOT_REBOOT_REASON_BOOTLOADER:
+		mode = "bootloader";
+		break;
+	case FASTBOOT_REBOOT_REASON_RECOVERY:
+		mode = "recovery";
+		break;
+	case FASTBOOT_REBOOT_REASON_FASTBOOTD:
+		mode = "fastboot";
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	uclass_foreach_dev_probe(UCLASS_REBOOT_MODE, dev) {
+		ret = dm_reboot_mode_activate(dev, mode);
+		log_warning("set reboot mode %s: %d\n", mode, ret);
+		if (!ret)
+			return 0;
+	}
+	return -EINVAL;
+}
+
 static void check_reboot_mode(void)
 {
 	struct udevice *dev;
@@ -315,6 +346,7 @@ static void check_reboot_mode(void)
 			break;
 	}
 }
+#endif
 
 int board_init(void)
 {
