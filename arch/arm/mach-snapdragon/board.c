@@ -30,6 +30,7 @@
 #include <malloc.h>
 #include <fdt_support.h>
 #include <usb.h>
+#include <reboot-mode/reboot-mode.h>
 #include <sort.h>
 #include <time.h>
 
@@ -311,6 +312,18 @@ void __weak qcom_board_init(void)
 {
 }
 
+static void check_reboot_mode(void)
+{
+	struct udevice *dev;
+	int ret;
+
+	uclass_foreach_dev_probe(UCLASS_REBOOT_MODE, dev) {
+		ret = dm_reboot_mode_update(dev);
+		if (!ret)
+			break;
+	}
+}
+
 int board_init(void)
 {
 	show_psci_version();
@@ -578,6 +591,10 @@ int board_late_init(void)
 	/* Configure the dfu_string for capsule updates */
 #if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
 	qcom_configure_capsule_updates();
+#endif
+
+#if CONFIG_IS_ENABLED(FASTBOOT) && CONFIG_IS_ENABLED(DM_REBOOT_MODE)
+	check_reboot_mode();
 #endif
 
 	return 0;
