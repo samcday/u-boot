@@ -200,7 +200,6 @@ static const struct button_ops button_qcom_pmic_ops = {
 };
 
 static const struct udevice_id qcom_pwrkey_ids[] = {
-	{ .compatible = "qcom,pm8916-pon" },
 	{ .compatible = "qcom,pm8941-pon" },
 	{ .compatible = "qcom,pm8998-pon" },
 	{ .compatible = "qcom,pmk8350-pon" },
