@@ -31,7 +31,6 @@
 #include <linux/bug.h>
 #include <linux/psci.h>
 #include <linux/sizes.h>
-#include <power/regulator.h>
 #include <reboot-mode/reboot-mode.h>
 
 #include "qcom-priv.h"
