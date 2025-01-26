@@ -461,7 +461,7 @@ config PCA9551_I2C_ADDR
 
 config PM8916_PON
     bool "Enable PM8916 PON driver"
-    depends on CONFIG_PMIC_QCOM
+    depends on PMIC_QCOM
 	help
 	  The PM8916 PMIC is a multifunction device that handles pwr/resin buttons,
 	  reboot type (soft/hard/poweroff) and reboot mode (recovery/bootloader).
