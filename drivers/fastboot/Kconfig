@@ -108,6 +108,13 @@ config FASTBOOT_UUU_SUPPORT
 	  feature if you are using verified boot, as it will allow an attacker
 	  to bypass any restrictions you have in place.
 
+config FASTBOOT_REBOOT_MODE
+	bool "Use reboot-mode for fastboot reboot commands"
+	depends on DM_REBOOT_MODE
+	help
+	  Use a reboot-mode driver to implement fastboot reboot target flags
+	  such as reboot-bootloader, reboot-fastboot and reboot-recovery.
+
 choice
 	prompt "Flash provider for FASTBOOT"
 	depends on FASTBOOT_FLASH
