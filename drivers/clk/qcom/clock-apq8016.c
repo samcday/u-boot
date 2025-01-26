@@ -55,6 +55,10 @@ static struct vote_clk gcc_blsp1_ahb_clk = {
 
 static const struct gate_clk apq8016_clks[] = {
 	GATE_CLK(GCC_PRNG_AHB_CLK,	0x45004, BIT(8)),
+	GATE_CLK(GCC_SDCC1_AHB_CLK,	0x4201c, BIT(0)),
+	GATE_CLK(GCC_SDCC1_APPS_CLK,	0x42018, BIT(0)),
+	GATE_CLK(GCC_SDCC2_AHB_CLK,	0x4301c, BIT(0)),
+	GATE_CLK(GCC_SDCC2_APPS_CLK,	0x43018, BIT(0)),
 	GATE_CLK(GCC_USB_HS_AHB_CLK,    0x41008, BIT(0)),
 	GATE_CLK(GCC_USB_HS_SYSTEM_CLK,	0x41004, BIT(0)),
 };
