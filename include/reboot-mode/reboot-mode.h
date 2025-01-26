@@ -53,4 +53,16 @@ struct reboot_mode_ops {
  */
 int dm_reboot_mode_update(struct udevice *dev);
 
+/**
+ * dm_reboot_mode_activate() - activate a reboot mode by name
+ *
+ * This will read the given @dev plat_data for a named mode, and write the
+ * magic value for that mode to the device.
+ *
+ * @dev Device to write reboot magic to
+ * @mode name of the mode to lookup for magic value
+ * Return: 0 on success, -ve on error
+ */
+int dm_reboot_mode_activate(struct udevice *dev, const char *mode);
+
 #endif /* REBOOT_MODE_REBOOT_MODE_H__ */
