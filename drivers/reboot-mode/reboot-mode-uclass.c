@@ -9,6 +9,25 @@
 #include <exports.h>
 #include <reboot-mode/reboot-mode.h>
 
+int dm_reboot_mode_activate(struct udevice *dev, const char *mode)
+{
+	struct reboot_mode_ops *ops = reboot_mode_get_ops(dev);
+	int i;
+	const struct reboot_mode_uclass_platdata *plat_data =
+		dev_get_uclass_plat(dev);
+
+	if (!ops || !ops->set)
+		return -ENOSYS;
+
+	for (i = 0; i < plat_data->count; i++) {
+		if (!strcmp(plat_data->modes[i].mode_name, mode)) {
+			return ops->set(dev, plat_data->modes[i].mode_id);
+		}
+	}
+
+	return -ENOENT;
+}
+
 int dm_reboot_mode_update(struct udevice *dev)
 {
 	struct reboot_mode_ops *ops = reboot_mode_get_ops(dev);
