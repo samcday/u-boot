@@ -439,6 +439,13 @@ config SPL_PWRSEQ
 	  device. When the device is started up, its power sequence can be
 	  initiated.
 
+config PM8916_PON
+	bool "Enable PM8916 PON driver"
+	depends on PMIC_QCOM && MISC
+	help
+	  The PM8916 PMIC is a multifunction device that handles pwr/resin buttons,
+	  reboot type (soft/hard/poweroff) and reboot mode (recovery/bootloader).
+
 config STM32MP_FUSE
 	bool "Enable STM32MP fuse wrapper providing the fuse API"
 	depends on ARCH_STM32MP && MISC
