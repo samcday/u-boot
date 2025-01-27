@@ -8,6 +8,11 @@
 #include <asm/spin_table.h>
 #include <errno.h>
 
+int __weak spin_table_boot_cpu(void *fdt, int cpu_offset)
+{
+	return 0;
+}
+
 int spin_table_update_dt(void *fdt)
 {
 	int cpus_offset, offset;
@@ -44,6 +49,10 @@ int spin_table_update_dt(void *fdt)
 		prop = fdt_getprop(fdt, offset, "device_type", NULL);
 		if (!prop || strcmp(prop, "cpu"))
 			continue;
+
+		ret = spin_table_boot_cpu(fdt, offset);
+		if (ret)
+			return ret;
 
 		ret = fdt_setprop_u64(fdt, offset, "cpu-release-addr",
 				(unsigned long)&spin_table_cpu_release_addr);
