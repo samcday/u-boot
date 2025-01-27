@@ -198,6 +198,11 @@ static void qcom_psci_fixup(void *fdt)
 	ret = fdt_del_node(fdt, offset);
 	if (ret)
 		log_err("Failed to delete /psci node: %d\n", ret);
+
+	if (CONFIG_IS_ENABLED(ARMV8_SPIN_TABLE) &&
+	    (!fdt_node_check_compatible(fdt, 0, "qcom,msm8916") ||
+	     !fdt_node_check_compatible(fdt, 0, "qcom,apq8016")))
+		qcom_msm8916_smp_fixup(fdt);
 }
 
 /* We support booting U-Boot with an internal DT when running as a first-stage bootloader
