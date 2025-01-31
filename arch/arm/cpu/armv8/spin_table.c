@@ -16,11 +16,12 @@ int __weak spin_table_boot_cpu(void *fdt, int cpu_offset)
 int spin_table_update_dt(void *fdt)
 {
 	int cpus_offset, offset;
-	const char *prop;
+	const void *prop;
 	int ret;
 	unsigned long rsv_addr = (unsigned long)&spin_table_reserve_begin;
 	unsigned long rsv_size = &spin_table_reserve_end -
 						&spin_table_reserve_begin;
+        bool found_cpus = false;
 
 	cpus_offset = fdt_path_offset(fdt, "/cpus");
 	if (cpus_offset < 0)
@@ -50,6 +51,14 @@ int spin_table_update_dt(void *fdt)
 		if (!prop || strcmp(prop, "cpu"))
 			continue;
 
+                /* don't set cpu-release-addr if it already exists (this means
+                 * a previous bootloader has already handled it) */
+                prop = fdt_get_property(fdt, offset, "cpu-release-addr", NULL);
+                if (prop)
+                        continue;
+
+                found_cpus = true;
+
 		ret = spin_table_boot_cpu(fdt, offset);
 		if (ret)
 			return ret;
@@ -59,6 +68,10 @@ int spin_table_update_dt(void *fdt)
 		if (ret)
 			return -ENOSPC;
 	}
+
+        /* no need to reserve spin-table memory if no CPUs ended up using it */
+        if (!found_cpus)
+                return 0;
 
 	ret = fdt_add_mem_rsv(fdt, rsv_addr, rsv_size);
 	if (ret)
