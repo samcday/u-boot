@@ -161,6 +161,13 @@ static int qcom_ci_hdrc_bind(struct udevice *dev)
 	if (ret)
 		return ret;
 
+#if CONFIG_IS_ENABLED(DM_USB_GADGET) && CONFIG_IS_ENABLED(CI_UDC)
+	ret = device_bind_driver_to_node(dev, "ci-udc", "ci-udc",
+					 dev_ofnode(dev), NULL);
+	if (ret)
+		return ret;
+#endif
+
 	if (!ofnode_valid(ulpi_node))
 		return 0;
 
