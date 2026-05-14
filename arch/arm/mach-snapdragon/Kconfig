@@ -1,5 +1,11 @@
 if ARCH_SNAPDRAGON
 
+config ARCH_SNAPDRAGON_ARM32
+	bool "Build Snapdragon support for ARMv7-A SoCs"
+	help
+	  Select this for older 32-bit Snapdragon SoCs such as MSM8960.
+	  Existing Snapdragon boards default to the ARM64 path.
+
 config SYS_SOC
 	default "snapdragon"
 

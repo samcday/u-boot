@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: GPL-2.0
+/dts-v1/;
+
+#include "qcom-msm8960.dtsi"
+
+/ {
+	model = "Samsung Galaxy Express GT-I8730";
+	compatible = "samsung,expressltexx", "qcom,msm8960";
+	chassis-type = "handset";
+
+	aliases {
+		serial0 = &gsbi5_serial;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+};
+
+&{/memory@80000000} {
+	/* Conservative first RAM bank for initial bring-up. */
+	reg = <0x80000000 0x20000000>;
+};
+
+&gsbi5 {
+	compatible = "qcom,gsbi-v1.0.0", "simple-bus";
+	qcom,mode = <GSBI_PROT_I2C_UART>;
+	status = "okay";
+};
+
+&gsbi5_serial {
+	clock-frequency = <7372800>;
+	status = "okay";
+};
