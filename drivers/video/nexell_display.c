@@ -521,9 +521,7 @@ static int nx_display_probe(struct udevice *dev)
 		uc_priv->bpix = VIDEO_BPP16;
 		break;
 	case 3:
-		/* There is no VIDEO_BPP24 because these values are of
-		 * type video_log2_bpp
-		 */
+		/* Keep the existing 24-bit panels padded to 32-bit. */
 	case 4:
 		uc_priv->bpix = VIDEO_BPP32;
 		break;
