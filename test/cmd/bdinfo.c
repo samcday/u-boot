@@ -91,7 +91,7 @@ static int test_video_info(struct unit_test_state *uts)
 			}
 			ut_assert_nextline("%-12s= %dx%dx%d", "FB size",
 					   upriv->xsize, upriv->ysize,
-					   1 << upriv->bpix);
+					   VNBITS(upriv->bpix));
 		}
 	}
 
