@@ -114,7 +114,7 @@ static void show_video_info(void)
 						   plat->copy_size);
 			}
 			printf("%-12s= %dx%dx%d\n", "FB size", upriv->xsize,
-			       upriv->ysize, 1 << upriv->bpix);
+			       upriv->ysize, VNBITS(upriv->bpix));
 		}
 	}
 }
