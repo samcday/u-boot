@@ -197,6 +197,18 @@ int video_fill_part(struct udevice *dev, int xstart, int ystart, int xend,
 			}
 			break;
 		}
+		case VIDEO_BPP24: {
+			u8 *dst = line;
+
+			if (IS_ENABLED(CONFIG_VIDEO_BPP24)) {
+				for (i = 0; i < pixels; i++) {
+					*dst++ = colour;
+					*dst++ = colour >> 8;
+					*dst++ = colour >> 16;
+				}
+			}
+			break;
+		}
 		case VIDEO_BPP32: {
 			u32 *dst = line;
 
@@ -279,6 +291,12 @@ int video_fill(struct udevice *dev, u32 colour)
 			break;
 		}
 		fallthrough;
+	case VIDEO_BPP24:
+		if (CONFIG_IS_ENABLED(VIDEO_BPP24)) {
+			video_fill_part(dev, 0, 0, priv->xsize, priv->ysize, colour);
+			break;
+		}
+		fallthrough;
 	case VIDEO_BPP32:
 		if (CONFIG_IS_ENABLED(VIDEO_BPP32)) {
 			u32 *ppix = priv->fb;
@@ -342,6 +360,12 @@ u32 video_index_to_colour(struct video_priv *priv, enum colour_idx idx)
 			       ((colours[idx].g >> 2) <<  5) |
 			       ((colours[idx].b >> 3) <<  0);
 		}
+		break;
+	case VIDEO_BPP24:
+		if (CONFIG_IS_ENABLED(VIDEO_BPP24))
+			return (colours[idx].r << 16) |
+			       (colours[idx].g <<  8) |
+			       (colours[idx].b <<  0);
 		break;
 	case VIDEO_BPP32:
 		if (CONFIG_IS_ENABLED(VIDEO_BPP32)) {
