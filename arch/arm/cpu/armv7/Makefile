@@ -3,7 +3,9 @@
 # (C) Copyright 2000-2003
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
 
+ifneq ($(CONFIG_EFI_APP),y)
 extra-y	:= start.o
+endif
 
 obj-y	+= cache_v7.o cache_v7_asm.o
 

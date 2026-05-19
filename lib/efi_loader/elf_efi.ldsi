@@ -15,6 +15,9 @@ SECTIONS
 {
 	.text 0x0 : {
 		_text = .;
+		_stext = .;
+		__init_begin = .;
+		__image_copy_start = .;
 		*(.text.head)
 		*(.text)
 		*(.text.*)
@@ -25,15 +28,33 @@ SECTIONS
 	. = ALIGN(16);
 	.dynamic : { *(.dynamic) }
 	. = ALIGN(512);
-	.rela.dyn : { *(.rela.dyn) }
-	.rela.plt : { *(.rela.plt) }
-	.rela.got : { *(.rela.got) }
-	.rela.data : { *(.rela.data) *(.rela.data*) }
+	.rel.dyn : {
+		*(.rel.dyn)
+		*(.rel.dyn.*)
+		*(.rel.data)
+		*(.rel.data*)
+		*(.rel.got)
+		*(.rel.plt)
+		*(.rel__u_boot_list*)
+		*(.rel.*)
+	}
+	. = ALIGN(512);
+	.rela.dyn : {
+		*(.rela.dyn)
+		*(.rela.dyn.*)
+		*(.rela.data)
+		*(.rela.data*)
+		*(.rela.got)
+		*(.rela.plt)
+		*(.rela__u_boot_list*)
+		*(.rela.*)
+	}
 	. = ALIGN(4096);
 	_etext = .;
 	_text_size = . - _text;
 	.data : {
 		_data = .;
+		_sdata = .;
 		*(.sdata)
 		*(.data)
 		*(.data1)
@@ -41,11 +62,19 @@ SECTIONS
 		*(.got.plt)
 		*(.got)
 
+		/* U-Boot needs linker lists and embedded devicetrees at runtime. */
+		. = ALIGN(8);
+		KEEP(*(SORT(__u_boot_list*)));
+		. = ALIGN(8);
+		KEEP(*(.dtb.init.rodata*));
+		KEEP(*(.dtb*));
+
 		/*
 		 * The EFI loader doesn't seem to like a .bss section, so we
 		 * stick it all into .data:
 		 */
 		. = ALIGN(16);
+		__bss_start = .;
 		_bss = .;
 		*(.sbss)
 		*(.scommon)
@@ -55,9 +84,14 @@ SECTIONS
 		*(COMMON)
 		. = ALIGN(512);
 		_bss_end = .;
+		__bss_end = .;
+		__bss_stop = .;
 		_edata = .;
 	} :data
 	_data_size = _edata - _data;
+	_end = _edata;
+	__image_copy_end = _edata;
+	__init_end = _edata;
 
 	. = ALIGN(4096);
 	.dynsym   : { *(.dynsym) }

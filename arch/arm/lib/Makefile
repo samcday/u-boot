@@ -11,7 +11,9 @@ obj-$(CONFIG_$(PHASE_)LIB_BOOTI) += image.o
 obj-$(CONFIG_$(PHASE_)LIB_BOOTZ) += zimage.o
 obj-$(CONFIG_$(PHASE_)LIB_BOOTM) += bootm.o
 
-ifdef CONFIG_CPU_V7M_V8M
+ifeq ($(CONFIG_EFI_APP),y)
+obj-y	+= $(EFI_CRT0) $(EFI_RELOC) efi_app.o
+else ifdef CONFIG_CPU_V7M_V8M
 obj-y	+= vectors_m.o crt0.o
 else ifdef CONFIG_ARM64
 obj-y	+= crt0_64.o
@@ -26,7 +28,9 @@ obj-y   += setjmp.o
 endif
 
 ifndef CONFIG_XPL_BUILD
-ifdef CONFIG_ARM64
+ifeq ($(CONFIG_EFI_APP),y)
+# EFI enters through crt0_arm_efi.S and does not use normal ARM relocation.
+else ifdef CONFIG_ARM64
 obj-y	+= relocate_64.o
 else
 obj-y	+= relocate.o

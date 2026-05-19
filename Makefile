@@ -1300,7 +1300,7 @@ LDFLAGS_u-boot += -z notext $(call ld-option,--apply-dynamic-relocs)
 
 LDFLAGS_u-boot += --build-id=none
 
-ifeq ($(CONFIG_ARC)$(CONFIG_NIOS2)$(CONFIG_X86)$(CONFIG_XTENSA),)
+ifeq ($(CONFIG_ARC)$(CONFIG_NIOS2)$(CONFIG_X86)$(CONFIG_XTENSA)$(CONFIG_EFI_APP),)
 LDFLAGS_u-boot += -Ttext $(CONFIG_TEXT_BASE)
 endif
 

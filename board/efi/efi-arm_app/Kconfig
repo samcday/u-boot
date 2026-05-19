@@ -1,0 +1,16 @@
+if TARGET_EFI_ARM_APP32
+
+config SYS_BOARD
+	default "efi-arm_app"
+
+config SYS_VENDOR
+	default "efi"
+
+config SYS_SOC
+	default "efi"
+
+config BOARD_SPECIFIC_OPTIONS # dummy
+	def_bool y
+	imply VIDEO_EFI
+
+endif

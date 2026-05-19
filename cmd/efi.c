@@ -16,6 +16,17 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+static ulong efi_table_addr(void)
+{
+	if (IS_ENABLED(CONFIG_EFI_APP))
+		return (ulong)efi_get_sys_table();
+#ifdef CONFIG_X86
+	return gd->arch.table;
+#else
+	return 0;
+#endif
+}
+
 static const char *const type_name[] = {
 	"reserved",
 	"loader_code",
@@ -250,7 +261,7 @@ static int do_efi_mem(struct cmd_tbl *cmdtp, int flag, int argc,
 		version = map->version;
 	}
 	printf("EFI table at %lx, memory map %p, size %x, key %x, version %x, descr. size %#x\n",
-	       gd->arch.table, orig, size, key, version, desc_size);
+	       efi_table_addr(), orig, size, key, version, desc_size);
 	if (version != EFI_MEM_DESC_VERSION) {
 		printf("Incorrect memory map version\n");
 		ret = -EPROTONOSUPPORT;

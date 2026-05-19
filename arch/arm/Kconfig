@@ -713,6 +713,21 @@ config ARCH_BCMBCA
 	select OF_CONTROL
 	imply CMD_DM
 
+config TARGET_EFI_ARM_APP32
+	bool "Support 32-bit EFI application"
+	select BLK
+	select CPU_V7A
+	select DM
+	select DM_SERIAL
+	select EFI_APP
+	select EFI_CLIENT
+	select OF_CONTROL
+	select SKIP_LOWLEVEL_INIT
+	help
+	  Build U-Boot as a 32-bit ARM UEFI application. In this mode EFI
+	  performs firmware initialization and U-Boot uses EFI services for
+	  basic console and media access.
+
 config TARGET_VEXPRESS_CA9X4
 	bool "Support vexpress_ca9x4"
 	select CPU_V7A
@@ -2414,6 +2429,8 @@ source "arch/arm/mach-imx/Kconfig"
 source "arch/arm/mach-nexell/Kconfig"
 
 source "arch/arm/mach-npcm/Kconfig"
+
+source "board/efi/efi-arm_app/Kconfig"
 
 source "board/armltd/total_compute/Kconfig"
 source "board/armltd/corstone1000/Kconfig"

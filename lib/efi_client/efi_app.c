@@ -28,6 +28,15 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+static void efi_set_gd(struct global_data *gd_ptr)
+{
+#if defined(CONFIG_ARM) || defined(CONFIG_RISCV)
+	set_gd(gd_ptr);
+#else
+	global_data_ptr = gd_ptr;
+#endif
+}
+
 int efi_info_get(enum efi_entry_t type, void **datap, int *sizep)
 {
 	return -ENOSYS;
@@ -74,12 +83,11 @@ static efi_status_t setup_memory(struct efi_priv *priv)
 	int pages;
 
 	/*
-	 * Use global_data_ptr instead of gd since it is an assignment. There
-	 * are very few assignments to global_data in U-Boot and this makes
-	 * it easier to find them.
+	 * Set gd through the architecture mechanism before using normal U-Boot
+	 * code.
 	 */
-	global_data_ptr = efi_malloc(priv, sizeof(struct global_data), &ret);
-	if (!global_data_ptr)
+	efi_set_gd(efi_malloc(priv, sizeof(struct global_data), &ret));
+	if (!gd)
 		return ret;
 	memset(gd, '\0', sizeof(*gd));
 
@@ -131,7 +139,7 @@ static void free_memory(struct efi_priv *priv)
 
 	efi_free(priv, (void *)gd->malloc_base);
 	efi_free(priv, gd);
-	global_data_ptr = NULL;
+	efi_set_gd(NULL);
 }
 
 static void scan_tables(struct efi_system_table *sys_table)

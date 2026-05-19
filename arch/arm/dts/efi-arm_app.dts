@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Generic ARM U-Boot EFI application device tree.
+ */
+
+/dts-v1/;
+
+/include/ "skeleton.dtsi"
+
+/ {
+	model = "EFI ARM Application";
+	compatible = "efi,arm-app";
+
+	chosen {
+		stdout-path = &serial;
+	};
+
+	serial: serial {
+		compatible = "efi,uart";
+	};
+
+	reset {
+		compatible = "efi,reset";
+		bootph-all;
+	};
+
+	efi-fb {
+		compatible = "efi-fb";
+		bootph-some-ram;
+	};
+};

@@ -107,7 +107,9 @@ PLATFORM_CPPFLAGS += $(patsubst %,-I$(srctree)/%include,$(machdirs))
 
 libs-y += $(machdirs)
 
+ifneq ($(CONFIG_EFI_APP),y)
 head-y := arch/arm/cpu/$(CPU)/start.o
+endif
 
 ifeq ($(CONFIG_XPL_BUILD),y)
 ifeq ($(CONFIG_SYS_SOC)$(CONFIG_SPL_FRAMEWORK),"mxs")
