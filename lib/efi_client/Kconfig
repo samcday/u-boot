@@ -1,10 +1,10 @@
 menu "U-Boot as UEFI application"
-	depends on X86
+	depends on X86 || ARM
 
 config EFI_CLIENT
 	bool "Support running U-Boot from EFI"
-	depends on X86
-	imply X86_TSC_READ_BASE
+	depends on X86 || ARM
+	imply X86_TSC_READ_BASE if X86
 	select EFI
 	help
 	  U-Boot can be started from EFI on certain platforms. This allows
@@ -14,7 +14,7 @@ config EFI_CLIENT
 
 choice
 	prompt "Select EFI mode to use"
-	depends on X86 && EFI_CLIENT
+	depends on EFI_CLIENT
 
 config EFI_APP
 	bool "Support running as an EFI application"
@@ -28,6 +28,7 @@ config EFI_APP
 
 config EFI_STUB
 	bool "Support running as an EFI payload"
+	depends on X86
 
 endchoice
 
@@ -51,7 +52,7 @@ endchoice
 
 choice
 	prompt "EFI stub 32/64-bit selection"
-	depends on EFI_STUB
+	depends on X86 && EFI_STUB
 	help
 	  EFI does not support mixing 32-bit and 64-bit modes. This is a
 	  significant problem because it means that you must build a stub with

@@ -694,6 +694,9 @@ unsigned long elf_hash(const unsigned char *name);
 
  /* ARM relocs */
 #define R_ARM_NONE		0	/* No reloc */
+#define R_ARM_ABS32		2	/* Direct 32-bit */
+#define R_ARM_GLOB_DAT		21	/* Create GOT entry */
+#define R_ARM_JUMP_SLOT		22	/* Create PLT entry */
 #define R_ARM_RELATIVE		23	/* Adjust by program base */
 
 /* AArch64 relocs */

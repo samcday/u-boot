@@ -109,8 +109,17 @@ PLATFORM_LIBS := arch/arm/lib/eabi_compat.o \
 	$(filter-out arch/arm/lib/eabi_compat.o, $(PLATFORM_LIBS))
 endif
 
+ifeq ($(CONFIG_EFI_APP),y)
+LDSCRIPT := $(srctree)/arch/arm/lib/elf_arm_efi.lds
+PLATFORM_CPPFLAGS += $(CFLAGS_EFI)
+KBUILD_LDFLAGS += -Bsymbolic -Bsymbolic-functions
+LDFLAGS_FINAL += -znocombreloc -shared
+OBJCOPYFLAGS_EFI := -O binary -j .text -j .sdata -j .data \
+	-j .dynamic -j .dynsym -j .dynstr -j .rel* -j .reloc --strip-all
+else
 # needed for relocation
 LDFLAGS_u-boot += -pie
+endif
 
 ifeq ($(CONFIG_ARM64),y)
 # U-Boot uses fixed 4K granules, so we force the linker to match.
@@ -139,6 +148,7 @@ endif
 endif
 
 ifneq ($(CONFIG_XPL_BUILD),y)
+ifneq ($(CONFIG_EFI_APP),y)
 # Check that only R_ARM_RELATIVE relocations are generated.
 INPUTS-y += checkarmreloc
 # The movt / movw can hardcode 16 bit parts of the addresses in the
@@ -146,6 +156,7 @@ INPUTS-y += checkarmreloc
 # such usage by requiring word relocations.
 PLATFORM_CPPFLAGS += $(call cc-option, -mword-relocations)
 PLATFORM_CPPFLAGS += $(call cc-option, -fno-pic)
+endif
 endif
 
 # limit ourselves to the sections we want in the .bin.

@@ -18,6 +18,7 @@ efi_status_t EFIAPI _relocate(long ldbase, Elf32_Dyn *dyn)
 {
 	long relsz = 0, relent = 0;
 	Elf32_Rel *rel = 0;
+	Elf32_Sym *symtab = 0;
 	ulong *addr;
 	int i;
 
@@ -33,6 +34,9 @@ efi_status_t EFIAPI _relocate(long ldbase, Elf32_Dyn *dyn)
 		case DT_RELENT:
 			relent = dyn[i].d_un.d_val;
 			break;
+		case DT_SYMTAB:
+			symtab = (Elf32_Sym *)((ulong)dyn[i].d_un.d_ptr + ldbase);
+			break;
 		default:
 			break;
 		}
@@ -45,6 +49,15 @@ efi_status_t EFIAPI _relocate(long ldbase, Elf32_Dyn *dyn)
 		return EFI_LOAD_ERROR;
 
 	while (relsz > 0) {
+		ulong symidx = ELF32_R_SYM(rel->r_info);
+		ulong symval = 0;
+
+		if (symidx) {
+			if (!symtab)
+				return EFI_LOAD_ERROR;
+			symval = symtab[symidx].st_value + ldbase;
+		}
+
 		/* apply the relocs */
 		switch (ELF32_R_TYPE(rel->r_info)) {
 		case R_ARM_NONE:
@@ -53,8 +66,19 @@ efi_status_t EFIAPI _relocate(long ldbase, Elf32_Dyn *dyn)
 			addr = (ulong *)(ldbase + rel->r_offset);
 			*addr += ldbase;
 			break;
-		default:
+		case R_ARM_ABS32:
+			addr = (ulong *)(ldbase + rel->r_offset);
+			*addr += symval;
 			break;
+		case R_ARM_GLOB_DAT:
+		case R_ARM_JUMP_SLOT:
+			if (!symidx)
+				return EFI_LOAD_ERROR;
+			addr = (ulong *)(ldbase + rel->r_offset);
+			*addr = symval;
+			break;
+		default:
+			return EFI_LOAD_ERROR;
 		}
 		rel = (Elf32_Rel *)((char *)rel + relent);
 		relsz -= relent;
