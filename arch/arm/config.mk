@@ -115,7 +115,8 @@ PLATFORM_CPPFLAGS += $(CFLAGS_EFI)
 KBUILD_LDFLAGS += -Bsymbolic -Bsymbolic-functions
 LDFLAGS_FINAL += -znocombreloc -shared
 OBJCOPYFLAGS_EFI := -O binary -j .text -j .sdata -j .data \
-	-j .dynamic -j .dynsym -j .dynstr -j .rel* -j .reloc --strip-all
+	-j .dynamic -j .dynsym -j .dynstr -j .rel* -j .pe_reloc -j .reloc \
+	--strip-all
 else
 # needed for relocation
 LDFLAGS_u-boot += -pie

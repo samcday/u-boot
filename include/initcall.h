@@ -14,20 +14,23 @@ _Static_assert(EVT_COUNT < 256, "Can only support 256 event types with 8 bits");
 
 #define INITCALL(_call) \
 	do { \
+		printf("initcall: %s(): enter %s()\n", __func__, #_call); \
 		if (_call()) { \
 			printf("%s(): initcall %s() failed\n", __func__, \
 			       #_call); \
 			hang(); \
 		} \
+		printf("initcall: %s(): leave %s()\n", __func__, #_call); \
 	} while (0)
 
 #define INITCALL_EVT(_evt) \
 	do { \
+		printf("initcall: %s(): enter event %d\n", __func__, _evt); \
 		if (event_notify_null(_evt)) { \
-			printf("%s(): event %d/%s failed\n", __func__, _evt, \
-			       event_type_name(_evt)) ; \
+			printf("%s(): event %d failed\n", __func__, _evt); \
 			hang(); \
 		} \
+		printf("initcall: %s(): leave event %d\n", __func__, _evt); \
 	} while (0)
 
 #if defined(CONFIG_WATCHDOG) || defined(CONFIG_HW_WATCHDOG)

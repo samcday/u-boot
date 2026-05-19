@@ -37,6 +37,23 @@ static void efi_set_gd(struct global_data *gd_ptr)
 #endif
 }
 
+static void efi_put_hex_ulong(struct efi_priv *priv, ulong val)
+{
+	int shift;
+
+	for (shift = sizeof(val) * 8 - 4; shift >= 0; shift -= 4) {
+		uint digit = (val >> shift) & 0xf;
+
+		efi_putc(priv, digit < 10 ? '0' + digit : 'a' + digit - 10);
+	}
+}
+
+static void efi_app_hang(void)
+{
+	for (;;)
+		;
+}
+
 int efi_info_get(enum efi_entry_t type, void **datap, int *sizep)
 {
 	return -ENOSYS;
@@ -86,36 +103,67 @@ static efi_status_t setup_memory(struct efi_priv *priv)
 	 * Set gd through the architecture mechanism before using normal U-Boot
 	 * code.
 	 */
+	efi_puts(priv, "\r\nmem: gd ");
 	efi_set_gd(efi_malloc(priv, sizeof(struct global_data), &ret));
-	if (!gd)
+	if (!gd) {
+		efi_puts(priv, "fail ");
+		efi_put_hex_ulong(priv, ret);
+		efi_puts(priv, "\r\n");
 		return ret;
+	}
 	memset(gd, '\0', sizeof(*gd));
 
+	efi_puts(priv, "malloc-f ");
 	gd->malloc_base = (ulong)efi_malloc(priv, CONFIG_VAL(SYS_MALLOC_F_LEN),
 					    &ret);
-	if (!gd->malloc_base)
+	if (!gd->malloc_base) {
+		efi_puts(priv, "fail ");
+		efi_put_hex_ulong(priv, ret);
+		efi_puts(priv, "\r\n");
 		return ret;
+	}
 	pages = CONFIG_EFI_RAM_SIZE >> 12;
 
 	/*
 	 * Don't allocate any memory above 4GB. U-Boot is a 32-bit application
 	 * so we want it to load below 4GB.
 	 */
+	efi_puts(priv, "ram ");
+	efi_put_hex_ulong(priv, CONFIG_EFI_RAM_SIZE);
+	efi_puts(priv, " ");
 	addr = 1ULL << 32;
 	ret = boot->allocate_pages(EFI_ALLOCATE_MAX_ADDRESS,
 				   priv->image_data_type, pages, &addr);
 	if (ret) {
+		efi_puts(priv, "max-fail ");
+		efi_put_hex_ulong(priv, ret);
+		efi_puts(priv, " any ");
+		addr = 0;
+		ret = boot->allocate_pages(EFI_ALLOCATE_ANY_PAGES,
+					   priv->image_data_type, pages, &addr);
+	}
+	if (ret) {
+		efi_puts(priv, "any-fail ");
+		efi_put_hex_ulong(priv, ret);
+		efi_puts(priv, " pool ");
 		log_info("(using pool %lx) ", ret);
 		priv->ram_base = (ulong)efi_malloc(priv, CONFIG_EFI_RAM_SIZE,
 						   &ret);
-		if (!priv->ram_base)
+		if (!priv->ram_base) {
+			efi_puts(priv, "fail ");
+			efi_put_hex_ulong(priv, ret);
+			efi_puts(priv, "\r\n");
 			return ret;
+		}
 		priv->use_pool_for_malloc = true;
 	} else {
 		log_info("(using allocated RAM address %lx) ", (ulong)addr);
 		priv->ram_base = addr;
 	}
 	gd->ram_size = pages << 12;
+	efi_puts(priv, "ok @");
+	efi_put_hex_ulong(priv, priv->ram_base);
+	efi_puts(priv, "\r\n");
 
 	return 0;
 }
@@ -186,7 +234,8 @@ efi_status_t EFIAPI efi_main(efi_handle_t image,
 	ret = setup_memory(priv);
 	if (ret) {
 		printf("Failed to set up memory: ret=%lx\n", ret);
-		return ret;
+		efi_puts(priv, "halting after setup_memory failure\r\n");
+		efi_app_hang();
 	}
 
 	scan_tables(priv->sys_table);
