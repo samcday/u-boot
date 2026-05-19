@@ -50,6 +50,12 @@ SECTIONS
 		*(.rela.*)
 	}
 	. = ALIGN(4096);
+	.dynsym   : { *(.dynsym) }
+	. = ALIGN(4096);
+	.dynstr   : { *(.dynstr) }
+	. = ALIGN(4096);
+	.hash     : { *(.hash) }
+	. = ALIGN(4096);
 	_etext = .;
 	_text_size = . - _text;
 	.data : {
@@ -94,10 +100,20 @@ SECTIONS
 	__init_end = _edata;
 
 	. = ALIGN(4096);
-	.dynsym   : { *(.dynsym) }
+	.pe_reloc : {
+		_reloc_start = .;
+		LONG(0x1000);
+		LONG(12);
+		SHORT(0);
+		SHORT(0);
+		_reloc_end = .;
+		_reloc_size = ABSOLUTE(_reloc_end - _reloc_start);
+		. = ALIGN(512);
+		_reloc_raw_end = .;
+		_reloc_raw_size = ABSOLUTE(_reloc_raw_end - _reloc_start);
+	} :data
 	. = ALIGN(4096);
-	.dynstr   : { *(.dynstr) }
-	. = ALIGN(4096);
+	_image_end = .;
 	.note.gnu.build-id : { *(.note.gnu.build-id) }
 	/DISCARD/ : {
 		*(.rel.reloc)

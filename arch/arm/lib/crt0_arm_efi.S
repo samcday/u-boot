@@ -9,6 +9,7 @@
 
 #include <asm-generic/pe.h>
 
+	.syntax		unified
 	.section	.text.head
 
 	/*
@@ -30,92 +31,81 @@ coff_header:
 	.short	section_table - optional_header	/* SizeOfOptionalHeader */
 	/* Characteristics */
 	.short	(IMAGE_FILE_EXECUTABLE_IMAGE | \
-		 IMAGE_FILE_LINE_NUMS_STRIPPED | \
-		 IMAGE_FILE_LOCAL_SYMS_STRIPPED | \
-		 IMAGE_FILE_32BIT_MACHINE | \
-		 IMAGE_FILE_DEBUG_STRIPPED)
+		 IMAGE_FILE_32BIT_MACHINE)
 optional_header:
 	.short	IMAGE_NT_OPTIONAL_HDR32_MAGIC	/* PE32 format */
 	.byte	0x02				/* MajorLinkerVersion */
 	.byte	0x14				/* MinorLinkerVersion */
-	.long	_etext - _start			/* SizeOfCode */
+	.long	_etext - _start_raw		/* SizeOfCode */
 	.long	_data_size			/* SizeOfInitializedData */
 	.long	0				/* SizeOfUninitializedData */
-	.long	_start - image_base		/* AddressOfEntryPoint */
-	.long	_start - image_base		/* BaseOfCode */
+	.long	_start_raw + 1 - image_base	/* AddressOfEntryPoint */
+	.long	_start_raw - image_base		/* BaseOfCode */
 	.long	0				/* BaseOfData */
 
 extra_header_fields:
-	.long	0				/* ImageBase */
+	.long	0x400000			/* ImageBase */
 	.long	0x1000				/* SectionAlignment */
 	.long	0x200				/* FileAlignment */
-	.short	0				/* MajorOperatingSystemVersion */
+	.short	1				/* MajorOperatingSystemVersion */
 	.short	0				/* MinorOperatingSystemVersion */
 	.short	0				/* MajorImageVersion */
 	.short	0				/* MinorImageVersion */
-	.short	0				/* MajorSubsystemVersion */
+	.short	1				/* MajorSubsystemVersion */
 	.short	0				/* MinorSubsystemVersion */
 	.long	0				/* Win32VersionValue */
 
-	.long	_edata - image_base		/* SizeOfImage */
+	.long	_image_end - image_base		/* SizeOfImage */
 
 	/*
 	 * Everything before the kernel image is considered part of the header
 	 */
-	.long	_start - image_base		/* SizeOfHeaders */
+	.long	_start_raw - image_base		/* SizeOfHeaders */
 	.long	0				/* CheckSum */
 	.short	IMAGE_SUBSYSTEM_EFI_APPLICATION	/* Subsystem */
 #if CONFIG_VENDOR_EFI
 	.short	0				/* DllCharacteristics */
 #else
-	.short	IMAGE_DLLCHARACTERISTICS_NX_COMPAT
+	.short	(IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE | \
+		 IMAGE_DLLCHARACTERISTICS_NX_COMPAT | \
+		 IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE)
 #endif
-	.long	0				/* SizeOfStackReserve */
-	.long	0				/* SizeOfStackCommit */
-	.long	0				/* SizeOfHeapReserve */
-	.long	0				/* SizeOfHeapCommit */
+	.long	0x100000			/* SizeOfStackReserve */
+	.long	0x1000				/* SizeOfStackCommit */
+	.long	0x100000			/* SizeOfHeapReserve */
+	.long	0x1000				/* SizeOfHeapCommit */
 	.long	0				/* LoaderFlags */
-	.long	0x6				/* NumberOfRvaAndSizes */
+	.long	0x10				/* NumberOfRvaAndSizes */
 
 	.quad	0				/* ExportTable */
 	.quad	0				/* ImportTable */
 	.quad	0				/* ResourceTable */
 	.quad	0				/* ExceptionTable */
 	.quad	0				/* CertificationTable */
-	.quad	0				/* BaseRelocationTable */
+	.long	_reloc_start - image_base	/* BaseRelocationTable */
+	.long	_reloc_size
+	.quad	0				/* Debug */
+	.quad	0				/* Architecture */
+	.quad	0				/* GlobalPtr */
+	.quad	0				/* TLS Table */
+	.quad	0				/* Load Config Table */
+	.quad	0				/* Bound Import */
+	.quad	0				/* Import Address Table */
+	.quad	0				/* Delay Import Descriptor */
+	.quad	0				/* CLR Runtime Header */
+	.quad	0				/* Reserved */
 
 	/* Section table */
 section_table:
-
-	/*
-	 * The EFI application loader requires a relocation section
-	 * because EFI applications must be relocatable.  This is a
-	 * dummy section as far as we are concerned.
-	 */
-	.ascii	".reloc"
-	.byte	0
-	.byte	0			/* end of 0 padding of section name */
-	.long	0
-	.long	0
-	.long	0			/* SizeOfRawData */
-	.long	0			/* PointerToRawData */
-	.long	0			/* PointerToRelocations */
-	.long	0			/* PointerToLineNumbers */
-	.short	0			/* NumberOfRelocations */
-	.short	0			/* NumberOfLineNumbers */
-	/* Characteristics (section flags) */
-	.long	(IMAGE_SCN_MEM_READ | \
-		 IMAGE_SCN_MEM_DISCARDABLE | \
-		 IMAGE_SCN_CNT_INITIALIZED_DATA)
 
 	.ascii	".text"
 	.byte	0
 	.byte	0
 	.byte	0			/* end of 0 padding of section name */
-	.long	_etext - _start		/* VirtualSize */
-	.long	_start - image_base	/* VirtualAddress */
-	.long	_etext - _start		/* SizeOfRawData */
-	.long	_start - image_base	/* PointerToRawData */
+	.long	_etext - _start_raw	/* VirtualSize */
+	.long	_start_raw - image_base	/* VirtualAddress */
+	.long	_etext - _start_raw	/* SizeOfRawData */
+	.long	_start_raw - image_base	/* PointerToRawData */
 	.long	0			/* PointerToRelocations */
 	.long	0			/* PointerToLineNumbers */
 	.short	0			/* NumberOfRelocations */
@@ -142,25 +132,52 @@ section_table:
 		 IMAGE_SCN_MEM_READ | \
 		 IMAGE_SCN_CNT_INITIALIZED_DATA)
 
-	.align		12
-	.globl		_start
-_start:
-	stmfd		sp!, {r0-r2, lr}
+	.ascii	".reloc"
+	.byte	0
+	.byte	0			/* end of 0 padding of section name */
+	.long	_reloc_size		/* VirtualSize */
+	.long	_reloc_start - image_base	/* VirtualAddress */
+	.long	_reloc_raw_size		/* SizeOfRawData */
+	.long	_reloc_start - image_base	/* PointerToRawData */
+	.long	0			/* PointerToRelocations */
+	.long	0			/* PointerToLineNumbers */
+	.short	0			/* NumberOfRelocations */
+	.short	0			/* NumberOfLineNumbers */
+	/* Characteristics (section flags) */
+	.long	(IMAGE_SCN_MEM_DISCARDABLE | \
+		 IMAGE_SCN_MEM_READ | \
+		 IMAGE_SCN_CNT_INITIALIZED_DATA)
 
-	adr		r1, .L_DYNAMIC
+	.align		12
+	.globl		_start_raw
+_start_raw:
+	.globl		_start
+	.thumb
+	.thumb_func
+_start:
+	push		{r0-r2, lr}
+
+	adr.w		r1, .L_DYNAMIC
 	ldr		r0, [r1]
 	add		r1, r0, r1
-	sub		r0, pc, #((.+8-image_base) & 0xff)
-	sub		r0, r0, #((.+4-image_base) & 0xff00)
+	adr.w		r0, .L_BASE
+.L_BASE:
+	ldr		r2, .L_IMAGE_BASE_OFF
+	sub		r0, r0, r2
 	bl		_relocate
-	teq		r0, #0
+	cmp		r0, #0
 	bne		0f
 
-	ldmfd		sp, {r0-r1}
+	ldr		r0, [sp]
+	ldr		r1, [sp, #4]
 	bl		efi_main
 
 0:	add		sp, sp, #12
-	ldr		pc, [sp], #4
+	pop		{r3}
+	bx		r3
 
+	.align		2
 .L_DYNAMIC:
 	.word		_DYNAMIC - .
+.L_IMAGE_BASE_OFF:
+	.word		.L_BASE - image_base

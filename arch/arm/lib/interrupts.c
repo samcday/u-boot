@@ -34,7 +34,9 @@ int interrupt_init(void)
 	/*
 	 * setup up stacks if necessary
 	 */
+#if !defined(CONFIG_EFI_APP)
 	IRQ_STACK_START_IN = gd->irq_sp + 8;
+#endif
 
 	enable_interrupts();
 
