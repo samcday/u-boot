@@ -52,6 +52,11 @@
 #define SDI_CLKCR_NEDGE		0x00002000
 #define SDI_CLKCR_HWFC_EN	0x00004000
 
+/* Qualcomm variant clock bits */
+#define SDI_CLKCR_QCOM_WIDBUS_8	0x00000c00
+#define SDI_CLKCR_QCOM_FLOWENA	0x00001000
+#define SDI_CLKCR_QCOM_FBCLK	0x00008000
+
 #define SDI_CLKCR_CLKDIV_INIT_V1 0x000000C6 /* MCLK/(2*(0xC6+1)) => 505KHz */
 #define SDI_CLKCR_CLKDIV_INIT_V2 0x000000FD
 
@@ -63,6 +68,7 @@
 #define SDI_CMD_WAITPEND	0x00000200
 #define SDI_CMD_CPSMEN		0x00000400
 #define SDI_CMD_SDIOSUSPEND	0x00000800
+#define SDI_CMD_QCOM_DATCMD	0x00001000
 #define SDI_CMD_ENDCMDCOMPL	0x00001000
 #define SDI_CMD_NIEN		0x00002000
 #define SDI_CMD_CE_ATACMD	0x00004000
@@ -190,6 +196,7 @@ struct pl180_mmc_host {
 	unsigned int clkdiv_init;
 	unsigned int pwr_init;
 	int version2;
+	int qcom;
 	struct mmc_config cfg;
 #ifdef CONFIG_DM_MMC
 	struct gpio_desc cd_gpio;
