@@ -14,6 +14,7 @@
 #include <command.h>
 #include <env.h>
 #include <fastboot.h>
+#include <image.h>
 #include <net.h>
 #include <vsprintf.h>
 
@@ -160,6 +161,9 @@ void fastboot_boot(void)
 		static char *const bootm_args[] = {
 			"bootm", boot_addr_start, NULL
 		};
+
+		if (IS_ENABLED(CONFIG_CMD_ABOOTIMG))
+			set_abootimg_addr((ulong)fastboot_buf_addr);
 
 		snprintf(boot_addr_start, sizeof(boot_addr_start) - 1,
 			 "0x%p", fastboot_buf_addr);

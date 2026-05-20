@@ -22,6 +22,7 @@
 #include <fdt_support.h>
 #include <init.h>
 #include <linux/bug.h>
+#include <linux/stringify.h>
 #include <linux/sizes.h>
 #include <lmb.h>
 #include <malloc.h>
@@ -634,6 +635,15 @@ int board_late_init(void)
 		 * as the fastboot buffer.
 		 */
 		status |= env_set_hex("loadaddr", addr);
+
+		if (IS_ENABLED(CONFIG_ARCH_SNAPDRAGON_ARM32) &&
+		    of_machine_is_compatible("nokia,fame")) {
+			/* Chain a fixed-link U-Boot payload instead of Linux bootm. */
+			status |= env_set("fastboot_bootcmd",
+					  "bootm start " __stringify(CONFIG_FASTBOOT_BUF_ADDR)
+					  "; bootm loados; go "
+					  __stringify(CONFIG_TEXT_BASE));
+		}
 	}
 
 	fdt_status |= !lmb_alloc(SZ_2M, &addr) ?

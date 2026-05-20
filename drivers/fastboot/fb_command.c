@@ -181,10 +181,15 @@ void fastboot_multiresponse(int cmd, char *response)
 			} else {
 				int ret = console_record_readline(buf, sizeof(buf) - 5);
 
-				if (ret < 0)
+				if (ret == -ENOSPC) {
+					console_record_reset();
+					fastboot_response("INFO", response,
+							  "Console record overflow; buffer reset");
+				} else if (ret < 0) {
 					fastboot_fail("Error reading console", response);
-				else
+				} else {
 					fastboot_response("INFO", response, "%s", buf);
+				}
 			}
 			break;
 		}
@@ -394,6 +399,9 @@ static void __maybe_unused run_ucmd(char *cmd_parameter, char *response)
 		return;
 	}
 
+	if (CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_CONSOLE))
+		console_record_reset_enable();
+
 	if (run_command(cmd_parameter, 0))
 		fastboot_fail("", response);
 	else
@@ -560,7 +568,7 @@ static void __maybe_unused oem_console(char *cmd_parameter, char *response)
 		console_in_puts(cmd_parameter);
 
 	if (console_record_isempty())
-		fastboot_fail("Empty console", response);
+		fastboot_okay(NULL, response);
 	else
 		fastboot_response(FASTBOOT_MULTIRESPONSE_START, response, NULL);
 }
