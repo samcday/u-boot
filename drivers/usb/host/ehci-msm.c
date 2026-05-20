@@ -139,7 +139,8 @@ static int qcom_ci_hdrc_probe(struct udevice *dev)
 	int ret;
 
 	ret = clk_get_bulk(dev, &p->clks);
-	if (ret && (ret != -ENOSYS && ret != -ENOENT)) {
+	/* Some early 32-bit Qualcomm targets rely on LK-left-on USB clocks. */
+	if (ret && (ret != -ENOSYS && ret != -ENOENT && ret != -ENODEV)) {
 		dev_err(dev, "Failed to get clocks: %d\n", ret);
 		return ret;
 	}
