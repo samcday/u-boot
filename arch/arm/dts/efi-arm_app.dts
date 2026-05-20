@@ -15,6 +15,10 @@
 		stdout-path = &serial;
 	};
 
+	aliases {
+		usb0 = &usb_otg;
+	};
+
 	serial: serial {
 		compatible = "efi,uart";
 	};
@@ -27,5 +31,25 @@
 	efi-fb {
 		compatible = "efi-fb";
 		bootph-some-ram;
+	};
+
+	usb_otg: usb@12500000 {
+		compatible = "qcom,ci-hdrc";
+		reg = <0x12500000 0x200>;
+		phy_type = "ulpi";
+		dr_mode = "peripheral";
+		ahb-burst-config = <0>;
+		phys = <&usb_hs_phy>;
+		phy-names = "usb-phy";
+		status = "okay";
+
+		ulpi {
+			usb_hs_phy: phy {
+				compatible = "qcom,usb-hs-phy-msm8960",
+					     "qcom,usb-hs-phy";
+				#phy-cells = <0>;
+				qcom,init-seq = /bits/ 8 <0x01 0x38 0x02 0x14>;
+			};
+		};
 	};
 };

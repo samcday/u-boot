@@ -62,7 +62,7 @@ static void efi_find_pixel_bits(u32 mask, u8 *pos, u8 *size)
  * Returns: 0 if OK, -ENOSYS if boot services are not available, -ENOTSUPP if
  * the protocol is not supported by EFI
  */
-static int get_mode_info(struct vesa_mode_info *vesa, u64 *fbp,
+static int get_mode_info(struct vesa_mode_info *vesa, u64 *fbp, u64 *fb_sizep,
 			 struct efi_gop_mode_info **infop)
 {
 	efi_guid_t efi_gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
@@ -83,6 +83,7 @@ static int get_mode_info(struct vesa_mode_info *vesa, u64 *fbp,
 
 	vesa->phys_base_ptr = mode->fb_base;
 	*fbp = mode->fb_base;
+	*fb_sizep = mode->fb_size;
 	vesa->x_resolution = mode->info->width;
 	vesa->y_resolution = mode->info->height;
 	*infop = mode->info;
@@ -102,7 +103,7 @@ static int get_mode_info(struct vesa_mode_info *vesa, u64 *fbp,
  * Returns: 0 if OK, -ve on error
  */
 static int get_mode_from_entry(struct vesa_mode_info *vesa, u64 *fbp,
-			       struct efi_gop_mode_info **infop)
+			       u64 *fb_sizep, struct efi_gop_mode_info **infop)
 {
 	struct efi_entry_gopmode *mode;
 	int size;
@@ -115,6 +116,7 @@ static int get_mode_from_entry(struct vesa_mode_info *vesa, u64 *fbp,
 	}
 	vesa->phys_base_ptr = mode->fb_base;
 	*fbp = mode->fb_base;
+	*fb_sizep = mode->fb_size;
 	vesa->x_resolution = mode->info->width;
 	vesa->y_resolution = mode->info->height;
 	*infop = mode->info;
@@ -126,12 +128,13 @@ static int save_vesa_mode(struct vesa_mode_info *vesa, u64 *fbp)
 {
 	const struct efi_framebuffer *fbinfo;
 	struct efi_gop_mode_info *info;
+	u64 fb_size;
 	int ret;
 
 	if (IS_ENABLED(CONFIG_EFI_APP))
-		ret = get_mode_info(vesa, fbp, &info);
+		ret = get_mode_info(vesa, fbp, &fb_size, &info);
 	else
-		ret = get_mode_from_entry(vesa, fbp, &info);
+		ret = get_mode_from_entry(vesa, fbp, &fb_size, &info);
 	if (ret) {
 		printf("EFI graphics output protocol not found (err=%dE)\n",
 		       ret);
@@ -173,6 +176,14 @@ static int save_vesa_mode(struct vesa_mode_info *vesa, u64 *fbp)
 	} else {
 		log_err("Unknown framebuffer format: %d\n", info->pixel_format);
 		return -EINVAL;
+	}
+
+	if (fb_size &&
+	    vesa->bytes_per_scanline * vesa->y_resolution > fb_size) {
+		log_warning("EFI GOP stride exceeds framebuffer size, "
+			    "using visible width\n");
+		vesa->bytes_per_scanline = vesa->x_resolution *
+			DIV_ROUND_UP(vesa->bits_per_pixel, 8);
 	}
 
 	return 0;

@@ -6,9 +6,12 @@
 #include <dm.h>
 #include <generic-phy.h>
 #include <linux/bitops.h>
+#include <linux/kernel.h>
 #include <usb/ehci-ci.h>
 #include <usb/ulpi.h>
 #include <asm/io.h>
+
+#define QCOM_USB_HS_PHY_INIT_SEQ_MAX	32
 
 /* PHY viewport regs */
 #define ULPI_MISC_A_READ		0x96
@@ -23,15 +26,33 @@ struct msm_phy_priv {
 	void __iomem *regs;
 	struct usb_ehci *ehci; /* Start of IP core*/
 	struct ulpi_viewport ulpi_vp; /* ULPI Viewport */
+	struct {
+		u8 addr;
+		u8 val;
+	} init_seq[QCOM_USB_HS_PHY_INIT_SEQ_MAX];
+	uint init_seq_num;
 };
 
 static int msm_phy_power_on(struct phy *phy)
 {
 	struct msm_phy_priv *priv = dev_get_priv(phy->dev);
+	int i, ret;
+
+	for (i = 0; i < priv->init_seq_num; i++) {
+		u8 *reg = (u8 *)(EXT_VENDOR_SPEC_OFFSET +
+				  priv->init_seq[i].addr);
+
+		ret = ulpi_write(&priv->ulpi_vp,
+				 reg, priv->init_seq[i].val);
+		if (ret)
+			return ret;
+	}
 
 	/* Select and enable external configuration with USB PHY */
-	ulpi_write(&priv->ulpi_vp, (u8 *)ULPI_MISC_A_SET,
-		   ULPI_MISC_A_VBUSVLDEXTSEL | ULPI_MISC_A_VBUSVLDEXT);
+	ret = ulpi_write(&priv->ulpi_vp, (u8 *)ULPI_MISC_A_SET,
+			 ULPI_MISC_A_VBUSVLDEXTSEL | ULPI_MISC_A_VBUSVLDEXT);
+	if (ret)
+		return ret;
 
 	return 0;
 }
@@ -39,11 +60,13 @@ static int msm_phy_power_on(struct phy *phy)
 static int msm_phy_power_off(struct phy *phy)
 {
 	struct msm_phy_priv *priv = dev_get_priv(phy->dev);
+	int ret;
 
 	/* Disable VBUS mimicing in the controller. */
-	ulpi_write(&priv->ulpi_vp, (u8 *)ULPI_MISC_A_CLEAR,
-		   ULPI_MISC_A_VBUSVLDEXTSEL | ULPI_MISC_A_VBUSVLDEXT);
-	return 0;
+	ret = ulpi_write(&priv->ulpi_vp, (u8 *)ULPI_MISC_A_CLEAR,
+			 ULPI_MISC_A_VBUSVLDEXTSEL | ULPI_MISC_A_VBUSVLDEXT);
+
+	return ret;
 }
 
 static int msm_phy_reset(struct phy *phy)
@@ -72,6 +95,8 @@ static int msm_phy_reset(struct phy *phy)
 static int msm_phy_probe(struct udevice *dev)
 {
 	struct msm_phy_priv *priv = dev_get_priv(dev);
+	const u8 *init_seq;
+	int size, i;
 
 	priv->regs = dev_remap_addr(dev_get_parent(dev));
 	if (!priv->regs)
@@ -85,6 +110,24 @@ static int msm_phy_probe(struct udevice *dev)
 	 */
 	priv->ulpi_vp.viewport_addr = (phys_addr_t)&priv->ehci->ulpi_viewpoint;
 
+	size = dev_read_size(dev, "qcom,init-seq");
+	if (size > 0) {
+		if (size % 2)
+			return -EINVAL;
+		if (size / 2 > ARRAY_SIZE(priv->init_seq))
+			return -EINVAL;
+
+		init_seq = dev_read_u8_array_ptr(dev, "qcom,init-seq", size);
+		if (!init_seq)
+			return -EINVAL;
+
+		for (i = 0; i < size / 2; i++) {
+			priv->init_seq[i].addr = init_seq[i * 2];
+			priv->init_seq[i].val = init_seq[i * 2 + 1];
+		}
+		priv->init_seq_num = size / 2;
+	}
+
 	return 0;
 }
 
@@ -95,7 +138,13 @@ static struct phy_ops msm_phy_ops = {
 };
 
 static const struct udevice_id msm_phy_ids[] = {
+	{ .compatible = "qcom,usb-hs-phy" },
+	{ .compatible = "qcom,usb-hs-phy-apq8064" },
+	{ .compatible = "qcom,usb-hs-phy-msm8226" },
+	{ .compatible = "qcom,usb-hs-phy-msm8660" },
 	{ .compatible = "qcom,usb-hs-phy-msm8916" },
+	{ .compatible = "qcom,usb-hs-phy-msm8960" },
+	{ .compatible = "qcom,usb-hs-phy-msm8974" },
 	{ }
 };
 

@@ -113,7 +113,7 @@ ifeq ($(CONFIG_EFI_APP),y)
 LDSCRIPT := $(srctree)/arch/arm/lib/elf_arm_efi.lds
 PLATFORM_CPPFLAGS += $(CFLAGS_EFI)
 KBUILD_LDFLAGS += -Bsymbolic -Bsymbolic-functions
-LDFLAGS_FINAL += -znocombreloc -shared
+LDFLAGS_FINAL += -L$(srctree) -znocombreloc -shared
 OBJCOPYFLAGS_EFI := -O binary -j .text -j .sdata -j .data \
 	-j .dynamic -j .dynsym -j .dynstr -j .rel* -j .pe_reloc -j .reloc \
 	--strip-all

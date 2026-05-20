@@ -53,6 +53,7 @@ static int ehci_usb_probe(struct udevice *dev)
 	struct msm_ehci_priv *p = dev_get_priv(dev);
 	struct usb_ehci *ehci = p->ehci;
 	struct usb_plat *plat = dev_get_plat(dev);
+	enum phy_mode phy_mode = PHY_MODE_USB_HOST;
 	struct ehci_hccr *hccr;
 	struct ehci_hcor *hcor;
 	int ret;
@@ -61,7 +62,10 @@ static int ehci_usb_probe(struct udevice *dev)
 	hcor = (struct ehci_hcor *)((phys_addr_t)hccr +
 			HC_LENGTH(ehci_readl(&(hccr)->cr_capbase)));
 
-	ret = generic_setup_phy(dev, &p->phy, 0, PHY_MODE_USB_HOST, 0);
+	if (plat->init_type == USB_INIT_DEVICE)
+		phy_mode = PHY_MODE_USB_DEVICE;
+
+	ret = generic_setup_phy(dev, &p->phy, 0, phy_mode, 0);
 	if (ret)
 		return ret;
 
