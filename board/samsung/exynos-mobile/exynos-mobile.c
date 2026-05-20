@@ -8,12 +8,15 @@
 #include <asm/armv8/mmu.h>
 #include <blk.h>
 #include <bootflow.h>
+#include <command.h>
 #include <ctype.h>
+#include <dm/uclass.h>
 #include <dm/ofnode.h>
 #include <efi.h>
 #include <efi_loader.h>
 #include <env.h>
 #include <errno.h>
+#include <i2c.h>
 #include <init.h>
 #include <linux/sizes.h>
 #include <lmb.h>
@@ -25,6 +28,13 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #define lmb_alloc(size, addr) \
 	lmb_alloc_mem(LMB_MEM_ALLOC_ANY, SZ_2M, addr, size, LMB_NONE)
+
+#define S2MU005_MUIC_I2C_ADDR		0x3d
+#define S2MU005_MUIC_CTRL1		0xb2
+#define S2MU005_MUIC_SW_CTRL		0xb5
+#define S2MU005_MUIC_CTRL_MANUAL	0x13
+#define S2MU005_MUIC_SW_DM_DP_MASK	0xfc
+#define S2MU005_MUIC_SW_USB		0x24
 
 struct efi_fw_image fw_images[] = {
 	{
@@ -133,6 +143,7 @@ static void exynos_env_setup(void)
 {
 	const char *bootargs = exynos_prev_bl_get_bootargs();
 	const char *dev_compatible, *soc_compatible;
+	bool is_j7xelte;
 	char *ptr;
 	char buf[128];
 	int nr_compatibles;
@@ -170,6 +181,7 @@ static void exynos_env_setup(void)
 			    __func__);
 		return;
 	}
+	is_j7xelte = !strcmp(dev_compatible, "samsung,j7xelte");
 
 	/* <manufacturer>,<soc> => platform = <soc> */
 	ptr = strchr(soc_compatible, ',');
@@ -197,7 +209,79 @@ static void exynos_env_setup(void)
 	snprintf(buf, sizeof(buf), "exynos/%s-%s.dtb", soc_compatible,
 		 dev_compatible);
 	env_set("fdtfile", buf);
+
+	if (is_j7xelte)
+		env_set("prefastbootcmd", "s2mu005_muic_usb");
 }
+
+static int exynos_s2mu005_get_bus(struct udevice **busp)
+{
+	ofnode node;
+
+	node = ofnode_path("/soc@0/i2c@13870000");
+	if (!ofnode_valid(node))
+		node = ofnode_path("/soc/i2c@13870000");
+	if (!ofnode_valid(node))
+		return -ENOENT;
+
+	return uclass_get_device_by_ofnode(UCLASS_I2C, node, busp);
+}
+
+static int exynos_s2mu005_muic_usb(void)
+{
+	struct udevice *bus, *chip;
+	u8 ctrl = S2MU005_MUIC_CTRL_MANUAL;
+	u8 val, old_val;
+	int ret;
+
+	ret = exynos_s2mu005_get_bus(&bus);
+	if (ret)
+		return ret;
+
+	ret = i2c_get_chip(bus, S2MU005_MUIC_I2C_ADDR, 1, &chip);
+	if (ret)
+		return ret;
+
+	ret = dm_i2c_write(chip, S2MU005_MUIC_CTRL1, &ctrl, 1);
+	if (ret)
+		return ret;
+
+	ret = dm_i2c_read(chip, S2MU005_MUIC_SW_CTRL, &val, 1);
+	if (ret)
+		return ret;
+
+	old_val = val;
+	val &= ~S2MU005_MUIC_SW_DM_DP_MASK;
+	val |= S2MU005_MUIC_SW_USB;
+
+	printf("Switching S2MU005 MUIC D+/D- to USB: 0x%02x -> 0x%02x\n",
+	       old_val, val);
+
+	ret = dm_i2c_write(chip, S2MU005_MUIC_SW_CTRL, &val, 1);
+	if (ret)
+		return ret;
+
+	env_set("stdin", "button-kbd");
+
+	return 0;
+}
+
+static int do_s2mu005_muic_usb(struct cmd_tbl *cmdtp, int flag, int argc,
+				      char *const argv[])
+{
+	int ret;
+
+	ret = exynos_s2mu005_muic_usb();
+	if (ret) {
+		printf("Failed to switch S2MU005 MUIC to USB: %d\n", ret);
+		return CMD_RET_FAILURE;
+	}
+
+	return CMD_RET_SUCCESS;
+}
+
+U_BOOT_CMD(s2mu005_muic_usb, 1, 0, do_s2mu005_muic_usb,
+	   "switch S2MU005 MUIC D+/D- path to USB", "");
 
 static int exynos_blk_env_setup(void)
 {
