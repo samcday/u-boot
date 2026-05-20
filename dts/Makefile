@@ -50,6 +50,7 @@ endif
 
 targets += dt.dtb
 
+ifeq ($(EXT_DTB),)
 $(DTB): arch-dtbs $(local_dtbos)
 	$(Q)test -e $@ || (						\
 	echo >&2;							\
@@ -58,6 +59,14 @@ $(DTB): arch-dtbs $(local_dtbos)
 	echo >&2 "or build with 'DEVICE_TREE=<device_tree>' argument";	\
 	echo >&2;							\
 	/bin/false)
+else
+$(DTB):
+	$(Q)test -e $@ || (						\
+	echo >&2;							\
+	echo >&2 "External Device Tree ($@) does not exist.";		\
+	echo >&2;							\
+	/bin/false)
+endif
 
 PHONY += arch-dtbs
 arch-dtbs:
