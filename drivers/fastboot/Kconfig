@@ -99,6 +99,14 @@ config FASTBOOT_FLASH
 	  the downloaded image to a non-volatile storage device. Define
 	  this to enable the "fastboot flash" command.
 
+config FASTBOOT_FETCH
+	bool "Enable FASTBOOT FETCH command"
+	depends on USB_FUNCTION_FASTBOOT && FASTBOOT_FLASH_BLOCK
+	help
+	  The fastboot protocol includes a "fetch" command for reading a
+	  partition image from the device. This enables block-backed fetches
+	  over the USB fastboot gadget.
+
 config FASTBOOT_UUU_SUPPORT
 	bool "Enable UUU support"
 	help
@@ -277,6 +285,14 @@ config FASTBOOT_OEM_RUN
 	  command allows running arbitrary U-Boot shell commands. Do not enable
 	  this feature if you are using verified boot, as it will allow an
 	  attacker to bypass any restrictions you have in place.
+
+config FASTBOOT_CMD_LOGICAL_PARTITIONS
+	bool "Recognize fastboot logical partition commands"
+	help
+	  Recognize Android dynamic partition management commands such as
+	  "create-logical-partition" and "delete-logical-partition". U-Boot
+	  does not provide a dynamic-partition metadata backend here, so these
+	  commands fail explicitly instead of being reported as unknown.
 
 config FASTBOOT_CMD_OEM_CONSOLE
 	bool "Enable the 'oem console' command"

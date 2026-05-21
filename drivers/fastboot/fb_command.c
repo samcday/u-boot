@@ -3,8 +3,10 @@
  * Copyright (C) 2016 The Android Open Source Project
  */
 
+#include <blk.h>
 #include <command.h>
 #include <console.h>
+#include <div64.h>
 #include <env.h>
 #include <fastboot.h>
 #include <fastboot-internal.h>
@@ -15,6 +17,7 @@
 #include <part.h>
 #include <stdlib.h>
 #include <vsprintf.h>
+#include <linux/kernel.h>
 #include <linux/printk.h>
 
 /**
@@ -32,14 +35,20 @@ static u32 fastboot_bytes_received;
  */
 static u32 fastboot_bytes_expected;
 
+static const void *upload_data;
+static u32 upload_size;
+static u32 upload_offset;
+
 static void okay(char *, char *);
 static void getvar(char *, char *);
 static void download(char *, char *);
 static void flash(char *, char *);
 static void erase(char *, char *);
+static void fetch(char *, char *);
 static void reboot_bootloader(char *, char *);
 static void reboot_fastbootd(char *, char *);
 static void reboot_recovery(char *, char *);
+static void logical_partition_unsupported(char *, char *);
 static void oem_format(char *, char *);
 static void oem_partconf(char *, char *);
 static void oem_bootbus(char *, char *);
@@ -68,6 +77,10 @@ static const struct {
 		.command = "erase",
 		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_FLASH, (erase), (NULL))
 	},
+	[FASTBOOT_COMMAND_FETCH] =  {
+		.command = "fetch",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_FETCH, (fetch), (NULL))
+	},
 	[FASTBOOT_COMMAND_BOOT] =  {
 		.command = "boot",
 		.dispatch = okay
@@ -91,6 +104,21 @@ static const struct {
 	[FASTBOOT_COMMAND_REBOOT_RECOVERY] =  {
 		.command = "reboot-recovery",
 		.dispatch = reboot_recovery
+	},
+	[FASTBOOT_COMMAND_CREATE_LOGICAL_PARTITION] = {
+		.command = "create-logical-partition",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_LOGICAL_PARTITIONS,
+						   (logical_partition_unsupported), (NULL))
+	},
+	[FASTBOOT_COMMAND_DELETE_LOGICAL_PARTITION] = {
+		.command = "delete-logical-partition",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_LOGICAL_PARTITIONS,
+						   (logical_partition_unsupported), (NULL))
+	},
+	[FASTBOOT_COMMAND_RESIZE_LOGICAL_PARTITION] = {
+		.command = "resize-logical-partition",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_LOGICAL_PARTITIONS,
+						   (logical_partition_unsupported), (NULL))
 	},
 	[FASTBOOT_COMMAND_SET_ACTIVE] =  {
 		.command = "set_active",
@@ -333,6 +361,47 @@ void fastboot_data_complete(char *response)
 	fastboot_bytes_received = 0;
 }
 
+void fastboot_upload_start(const void *data, u32 size)
+{
+	upload_data = data;
+	upload_size = size;
+	upload_offset = 0;
+}
+
+u32 fastboot_upload_read(void *buffer, u32 buffer_size)
+{
+	u32 bytes = min(buffer_size, upload_size - upload_offset);
+
+	if (!bytes || !upload_data)
+		return 0;
+
+	memcpy(buffer, (const u8 *)upload_data + upload_offset, bytes);
+	upload_offset += bytes;
+
+	return bytes;
+}
+
+void fastboot_upload_reset(void)
+{
+	upload_data = NULL;
+	upload_size = 0;
+	upload_offset = 0;
+}
+
+static int parse_u64(const char *s, u64 *value)
+{
+	char *endp;
+
+	if (!s || !*s)
+		return -EINVAL;
+
+	*value = simple_strtoull(s, &endp, 0);
+	if (*endp)
+		return -EINVAL;
+
+	return 0;
+}
+
 /**
  * flash() - write the downloaded image to the indicated partition.
  *
@@ -383,6 +452,96 @@ static void __maybe_unused erase(char *cmd_parameter, char *response)
 
 	if (IS_ENABLED(CONFIG_FASTBOOT_FLASH_SPI))
 		fastboot_spi_flash_erase(cmd_parameter, response);
+}
+
+static void __maybe_unused fetch(char *cmd_parameter, char *response)
+{
+	struct blk_desc *dev_desc;
+	struct disk_partition part_info;
+	char *part_name;
+	char *offset_str;
+	char *size_str;
+	u64 part_bytes;
+	u64 offset = 0;
+	u64 bytes;
+	lbaint_t start;
+	lbaint_t blkcnt;
+	lbaint_t read;
+
+	if (!cmd_parameter) {
+		fastboot_fail("partition not given", response);
+		return;
+	}
+
+	part_name = strsep(&cmd_parameter, ":");
+	offset_str = strsep(&cmd_parameter, ":");
+	size_str = strsep(&cmd_parameter, ":");
+
+	if (!part_name || !*part_name) {
+		fastboot_fail("partition not given", response);
+		return;
+	}
+
+	if (offset_str && parse_u64(offset_str, &offset)) {
+		fastboot_fail("invalid fetch offset", response);
+		return;
+	}
+
+	if (fastboot_block_get_part_info(part_name, &dev_desc, &part_info,
+					 response) < 0)
+		return;
+
+	part_bytes = (u64)part_info.size * part_info.blksz;
+	if (offset > part_bytes) {
+		fastboot_fail("fetch offset out of range", response);
+		return;
+	}
+
+	if (size_str) {
+		if (parse_u64(size_str, &bytes)) {
+			fastboot_fail("invalid fetch size", response);
+			return;
+		}
+	} else {
+		bytes = part_bytes - offset;
+	}
+
+	if (bytes > part_bytes - offset) {
+		fastboot_fail("fetch size out of range", response);
+		return;
+	}
+
+	if (bytes > fastboot_buf_size) {
+		fastboot_fail("fetch size too large", response);
+		return;
+	}
+
+	if (bytes > UINT_MAX) {
+		fastboot_fail("fetch size too large", response);
+		return;
+	}
+
+	if ((offset % part_info.blksz) || (bytes % part_info.blksz)) {
+		fastboot_fail("fetch range must be block aligned", response);
+		return;
+	}
+
+	start = part_info.start + (lbaint_t)(offset / part_info.blksz);
+	blkcnt = (lbaint_t)(bytes / part_info.blksz);
+	read = blk_dread(dev_desc, start, blkcnt, fastboot_buf_addr);
+	if (read != blkcnt) {
+		fastboot_fail("failed to read partition", response);
+		return;
+	}
+
+	fastboot_upload_start(fastboot_buf_addr, (u32)bytes);
+	fastboot_response("DATA", response, "%08x", (u32)bytes);
+}
+
+static void __maybe_unused logical_partition_unsupported(char *cmd_parameter,
+							 char *response)
+{
+	fastboot_fail("logical partitions not supported", response);
 }
 
 /**

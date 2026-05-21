@@ -19,6 +19,28 @@ extern u32 fastboot_buf_size;
 extern void (*fastboot_progress_callback)(const char *msg);
 
 /**
+ * fastboot_upload_start() - Start an upload from device to host
+ *
+ * @data: Pointer to data made available to the transport
+ * @size: Number of bytes to upload
+ */
+void fastboot_upload_start(const void *data, u32 size);
+
+/**
+ * fastboot_upload_read() - Copy the next upload chunk
+ *
+ * @buffer: Destination buffer
+ * @buffer_size: Maximum bytes to copy
+ * Return: Number of bytes copied
+ */
+u32 fastboot_upload_read(void *buffer, u32 buffer_size);
+
+/**
+ * fastboot_upload_reset() - Clear upload state
+ */
+void fastboot_upload_reset(void);
+
+/**
  * fastboot_getvar_all() - Writes current variable being listed from "all" to response.
  *
  * @response: Pointer to fastboot response buffer

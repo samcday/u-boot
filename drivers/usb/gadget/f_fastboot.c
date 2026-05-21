@@ -14,6 +14,7 @@
 #include <env.h>
 #include <errno.h>
 #include <fastboot.h>
+#include <fastboot-internal.h>
 #include <log.h>
 #include <malloc.h>
 #include <linux/printk.h>
@@ -417,6 +418,35 @@ static int fastboot_tx_write_str(const char *buffer)
 	return fastboot_tx_write(buffer, strlen(buffer));
 }
 
+static void fastboot_upload_complete(struct usb_ep *ep, struct usb_request *req)
+{
+	char response[FASTBOOT_RESPONSE_LEN] = {0};
+	u32 bytes;
+	int ret;
+
+	if (req->status != 0) {
+		fastboot_upload_reset();
+		fastboot_func->in_req->complete = fastboot_complete;
+		printf("status: %d ep '%s' trans: %d\n", req->status, ep->name,
+		       req->actual);
+		return;
+	}
+
+	bytes = fastboot_upload_read(req->buf, EP_BUFFER_SIZE);
+	if (bytes) {
+		req->length = bytes;
+		ret = usb_ep_queue(ep, req, 0);
+		if (ret)
+			printf("Error %d on queue\n", ret);
+		return;
+	}
+
+	fastboot_upload_reset();
+	fastboot_func->in_req->complete = fastboot_complete;
+	fastboot_okay(NULL, response);
+	fastboot_tx_write_str(response);
+}
+
 static void compl_do_reset(struct usb_ep *ep, struct usb_request *req)
 {
 	g_dnl_unregister();
@@ -551,8 +581,12 @@ static void rx_handler_command(struct usb_ep *ep, struct usb_request *req)
 	}
 
 	if (!strncmp("DATA", response, 4)) {
-		req->complete = rx_handler_dl_image;
-		req->length = rx_bytes_expected(ep);
+		if (cmd == FASTBOOT_COMMAND_FETCH) {
+			fastboot_func->in_req->complete = fastboot_upload_complete;
+		} else {
+			req->complete = rx_handler_dl_image;
+			req->length = rx_bytes_expected(ep);
+		}
 	}
 
 	if (!strncmp("OKAY", response, 4)) {

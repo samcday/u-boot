@@ -25,8 +25,10 @@ static void getvar_product(char *var_parameter, char *response);
 static void getvar_platform(char *var_parameter, char *response);
 static void getvar_current_slot(char *var_parameter, char *response);
 static void getvar_has_slot(char *var_parameter, char *response);
+static void getvar_max_fetch_size(char *var_parameter, char *response);
 static void getvar_partition_type(char *part_name, char *response);
 static void getvar_partition_size(char *part_name, char *response);
+static void getvar_is_logical(char *part_name, char *response);
 static void getvar_is_userspace(char *var_parameter, char *response);
 
 static const struct {
@@ -76,6 +78,12 @@ static const struct {
 		.dispatch = getvar_has_slot,
 		.list = false
 #endif
+#if IS_ENABLED(CONFIG_FASTBOOT_FETCH)
+	}, {
+		.variable = "max-fetch-size",
+		.dispatch = getvar_max_fetch_size,
+		.list = true
+#endif
 #if IS_ENABLED(CONFIG_FASTBOOT_FLASH_MMC)
 	}, {
 		.variable = "partition-type",
@@ -88,6 +96,10 @@ static const struct {
 		.dispatch = getvar_partition_size,
 		.list = false
 #endif
+	}, {
+		.variable = "is-logical",
+		.dispatch = getvar_is_logical,
+		.list = false
 	}, {
 		.variable = "is-userspace",
 		.dispatch = getvar_is_userspace,
@@ -108,8 +120,7 @@ static const struct {
  * @param[out] size If not NULL, will contain partition size
  * Return: Partition number or negative value on error
  */
-static int getvar_get_part_info(const char *part_name, char *response,
-				size_t *size)
+static int getvar_get_part_info(const char *part_name, char *response, u64 *size)
 {
 	int r;
 	struct blk_desc *dev_desc;
@@ -120,12 +131,12 @@ static int getvar_get_part_info(const char *part_name, char *response,
 		r = fastboot_block_get_part_info(part_name, &dev_desc, &disk_part,
 						 response);
 		if (r >= 0 && size)
-			*size = disk_part.size * disk_part.blksz;
+			*size = (u64)disk_part.size * disk_part.blksz;
 	} else if (IS_ENABLED(CONFIG_FASTBOOT_FLASH_MMC)) {
 		r = fastboot_mmc_get_part_info(part_name, &dev_desc, &disk_part,
 					       response);
 		if (r >= 0 && size)
-			*size = disk_part.size * disk_part.blksz;
+			*size = (u64)disk_part.size * disk_part.blksz;
 	} else if (IS_ENABLED(CONFIG_FASTBOOT_FLASH_NAND)) {
 		r = fastboot_nand_get_part_info(part_name, &part_info, response);
 		if (r >= 0 && size)
@@ -134,7 +145,7 @@ static int getvar_get_part_info(const char *part_name, char *response,
 		r = fastboot_spi_flash_get_part_info(part_name, &disk_part,
 						     response);
 		if (r >= 0 && size)
-			*size = disk_part.size * disk_part.blksz;
+			*size = (u64)disk_part.size * disk_part.blksz;
 	} else {
 		fastboot_fail("this storage is not supported in bootloader", response);
 		r = -ENODEV;
@@ -231,6 +242,12 @@ fail:
 	fastboot_fail("invalid partition name", response);
 }
 
+static void __maybe_unused getvar_max_fetch_size(char *var_parameter,
+						 char *response)
+{
+	fastboot_response("OKAY", response, "0x%08x", fastboot_buf_size);
+}
+
 static void __maybe_unused getvar_partition_type(char *part_name, char *response)
 {
 	int r;
@@ -252,11 +269,23 @@ static void __maybe_unused getvar_partition_type(char *part_name, char *response
 static void __maybe_unused getvar_partition_size(char *part_name, char *response)
 {
 	int r;
-	size_t size;
+	u64 size;
 
 	r = getvar_get_part_info(part_name, response, &size);
 	if (r >= 0)
-		fastboot_response("OKAY", response, "0x%016zx", size);
+		fastboot_response("OKAY", response, "0x%016llx",
+				  (unsigned long long)size);
+}
+
+static void getvar_is_logical(char *part_name, char *response)
+{
+	if (!part_name || part_name[0] == '\0') {
+		fastboot_fail("invalid partition name", response);
+		return;
+	}
+
+	if (getvar_get_part_info(part_name, response, NULL) >= 0)
+		fastboot_okay("no", response);
 }
 
 static void getvar_is_userspace(char *var_parameter, char *response)
