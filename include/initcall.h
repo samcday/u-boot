@@ -12,25 +12,31 @@
 
 _Static_assert(EVT_COUNT < 256, "Can only support 256 event types with 8 bits");
 
+#ifdef CONFIG_INITCALL_DEBUG
+#define INITCALL_TRACE(...) printf(__VA_ARGS__)
+#else
+#define INITCALL_TRACE(...) do { } while (0)
+#endif
+
 #define INITCALL(_call) \
 	do { \
-		printf("initcall: %s(): enter %s()\n", __func__, #_call); \
+		INITCALL_TRACE("initcall: %s(): enter %s()\n", __func__, #_call); \
 		if (_call()) { \
 			printf("%s(): initcall %s() failed\n", __func__, \
 			       #_call); \
 			hang(); \
 		} \
-		printf("initcall: %s(): leave %s()\n", __func__, #_call); \
+		INITCALL_TRACE("initcall: %s(): leave %s()\n", __func__, #_call); \
 	} while (0)
 
 #define INITCALL_EVT(_evt) \
 	do { \
-		printf("initcall: %s(): enter event %d\n", __func__, _evt); \
+		INITCALL_TRACE("initcall: %s(): enter event %d\n", __func__, _evt); \
 		if (event_notify_null(_evt)) { \
 			printf("%s(): event %d failed\n", __func__, _evt); \
 			hang(); \
 		} \
-		printf("initcall: %s(): leave event %d\n", __func__, _evt); \
+		INITCALL_TRACE("initcall: %s(): leave event %d\n", __func__, _evt); \
 	} while (0)
 
 #if defined(CONFIG_WATCHDOG) || defined(CONFIG_HW_WATCHDOG)

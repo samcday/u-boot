@@ -657,6 +657,13 @@ config EVENT
 
 	  See doc/develop/event.rst for more information.
 
+config INITCALL_DEBUG
+	bool "Trace initcall entry and exit"
+	help
+	  Print each initcall and event notification before and after it runs.
+	  This is useful while bringing up early board code, but is noisy on
+	  normal boot paths.
+
 if EVENT
 
 config EVENT_DYNAMIC
