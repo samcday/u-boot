@@ -898,5 +898,6 @@ void enable_caches(void)
 void enable_caches(void)
 {
 	icache_enable();
+	dcache_enable();
 }
 #endif
