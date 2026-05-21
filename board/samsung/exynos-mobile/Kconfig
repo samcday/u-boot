@@ -3,6 +3,13 @@ if TARGET_EXYNOS_MOBILE
 config ENV_SOURCE_FILE
 	default "exynos-mobile"
 
+config EXYNOS_MOBILE_FASTBOOT_DEV
+	bool "Start Exynos mobile boards in fastboot for development"
+	help
+	  Start the default boot command in fastboot mode. This is intended for
+	  bring-up and local development builds where the device should be ready
+	  for host-side iteration without button input.
+
 config LNX_KRNL_IMG_TEXT_OFFSET_BASE
 	default TEXT_BASE
 
