@@ -283,7 +283,7 @@ config FASTBOOT_CMD_OEM_CONSOLE
 	depends on CONSOLE_RECORD
 	help
 	  Add support for the "oem console" command to input and read console
-	  record buffer.
+	  record buffer, and the "oem console-reset" command to reset it.
 
 config FASTBOOT_OEM_BOARD
 	bool "Enable the 'oem board' command"

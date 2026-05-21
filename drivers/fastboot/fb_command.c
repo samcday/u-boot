@@ -44,6 +44,7 @@ static void oem_format(char *, char *);
 static void oem_partconf(char *, char *);
 static void oem_bootbus(char *, char *);
 static void oem_console(char *, char *);
+static void oem_console_reset(char *, char *);
 static void oem_board(char *, char *);
 static void run_ucmd(char *, char *);
 static void run_acmd(char *, char *);
@@ -115,6 +116,10 @@ static const struct {
 	[FASTBOOT_COMMAND_OEM_CONSOLE] = {
 		.command = "oem console",
 		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_CONSOLE, (oem_console), (NULL))
+	},
+	[FASTBOOT_COMMAND_OEM_CONSOLE_RESET] = {
+		.command = "oem console-reset",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_CONSOLE, (oem_console_reset), (NULL))
 	},
 	[FASTBOOT_COMMAND_OEM_BOARD] = {
 		.command = "oem board",
@@ -563,6 +568,12 @@ static void __maybe_unused oem_console(char *cmd_parameter, char *response)
 		fastboot_fail("Empty console", response);
 	else
 		fastboot_response(FASTBOOT_MULTIRESPONSE_START, response, NULL);
+}
+
+static void __maybe_unused oem_console_reset(char *cmd_parameter, char *response)
+{
+	console_record_reset();
+	fastboot_okay(NULL, response);
 }
 
 /**
