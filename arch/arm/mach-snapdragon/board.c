@@ -9,6 +9,7 @@
 #define LOG_CATEGORY LOGC_BOARD
 #define pr_fmt(fmt) "QCOM: " fmt
 
+#include <cpu_func.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
 #include <asm/setup.h>
@@ -892,5 +893,10 @@ void enable_caches(void)
 		debug("carveout time: %lums\n", get_timer(carveout_start));
 	}
 	dcache_enable();
+}
+#else
+void enable_caches(void)
+{
+	icache_enable();
 }
 #endif
