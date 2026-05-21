@@ -252,6 +252,16 @@ static ulong msm_clk_set_rate(struct clk *clk, ulong rate)
 	return 0;
 }
 
+static ulong msm_clk_get_rate(struct clk *clk)
+{
+	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(clk->dev);
+
+	if (data->get_rate)
+		return data->get_rate(clk);
+
+	return -ENOSYS;
+}
+
 static int msm_clk_enable(struct clk *clk)
 {
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(clk->dev);
@@ -378,6 +388,7 @@ static void __maybe_unused msm_dump_clks(struct udevice *dev)
 }
 
 static struct clk_ops msm_clk_ops = {
+	.get_rate = msm_clk_get_rate,
 	.set_rate = msm_clk_set_rate,
 	.enable = msm_clk_enable,
 #if IS_ENABLED(CONFIG_CMD_CLK)

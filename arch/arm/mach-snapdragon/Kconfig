@@ -6,6 +6,14 @@ config ARCH_SNAPDRAGON_ARM32
 	  Enable this when building U-Boot for older 32-bit Snapdragon
 	  platforms, such as the MSM8960 family.
 
+config NOKIA_FAME_LK_FASTBOOT_CHAIN
+	bool "Install Nokia Fame LK-chain fastboot boot command"
+	depends on ARCH_SNAPDRAGON_ARM32 && FASTBOOT
+	help
+	  Set a fastboot_bootcmd for U-Boot images loaded as Android boot-image
+	  kernels by LK at the downstream kernel address. Do not enable this for
+	  raw APPSBL images linked at the APPSBL address.
+
 config SYS_SOC
 	default "snapdragon"
 

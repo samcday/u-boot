@@ -26,6 +26,7 @@
 #include <linux/sizes.h>
 #include <lmb.h>
 #include <malloc.h>
+#include <mmc.h>
 #include <fdt_support.h>
 #include <usb.h>
 #include <sort.h>
@@ -411,6 +412,9 @@ static int get_cmdline_option(const char *cmdline, const char *key, char *out, i
 	const char *p, *p_end;
 	int len;
 
+	if (out_len <= 0)
+		return -EINVAL;
+
 	p = strstr(cmdline, key);
 	if (!p)
 		return -ENOENT;
@@ -418,11 +422,11 @@ static int get_cmdline_option(const char *cmdline, const char *key, char *out, i
 	p += strlen(key);
 	p_end = strstr(p, " ");
 	if (!p_end)
-		return -ENOENT;
+		p_end = p + strlen(p);
 
 	len = p_end - p;
-	if (len > out_len)
-		len = out_len;
+	if (len >= out_len)
+		len = out_len - 1;
 
 	strncpy(out, p, len);
 	out[len] = '\0';
@@ -451,16 +455,55 @@ static const char *get_cmdline(void)
 void qcom_set_serialno(void)
 {
 	const char *cmdline = get_cmdline();
-	char serial[32];
+	char serial[32] = { 0 };
 
-	if (!cmdline) {
+	if (!cmdline)
 		log_debug("Failed to get bootargs\n");
-		return;
-	}
+	else if (get_cmdline_option(cmdline, "androidboot.serialno=", serial,
+					 sizeof(serial)))
+		log_debug("Failed to get androidboot.serialno\n");
 
-	get_cmdline_option(cmdline, "androidboot.serialno=", serial, sizeof(serial));
 	if (serial[0] != '\0')
 		env_set("serial#", serial);
+}
+
+static int qcom_set_fame_serialno(void)
+{
+#if IS_ENABLED(CONFIG_MMC)
+	struct mmc *mmc;
+	u32 psn;
+
+	if (env_get("serial#"))
+		return 0;
+
+	if (!of_machine_is_compatible("nokia,fame"))
+		return 0;
+
+	mmc = find_mmc_device(0);
+	if (!mmc) {
+		log_warning("Failed to find eMMC for serial number\n");
+		return -ENODEV;
+	}
+
+	if (mmc_init(mmc)) {
+		log_warning("Failed to initialize eMMC for serial number\n");
+		return -EIO;
+	}
+
+	/* Match LK's target_serialno(): use the 32-bit eMMC CID PSN. */
+	psn = ((mmc->cid[2] & 0xffff) << 16) |
+	      ((mmc->cid[3] >> 16) & 0xffff);
+
+	if (!psn) {
+		log_warning("eMMC CID PSN is zero\n");
+		return -EINVAL;
+	}
+
+	env_set_hex("serial#", psn);
+	return 0;
+#else
+	return 0;
+#endif
 }
 
 /* Sets up the "board", and "soc" environment variables as well as constructing the devicetree
@@ -572,6 +615,7 @@ static void configure_env(void)
 	env_set("fdtfile", dt_path);
 
 	qcom_set_serialno();
+	qcom_set_fame_serialno();
 }
 
 void qcom_show_boot_source(void)
@@ -636,7 +680,7 @@ int board_late_init(void)
 		 */
 		status |= env_set_hex("loadaddr", addr);
 
-		if (IS_ENABLED(CONFIG_ARCH_SNAPDRAGON_ARM32) &&
+		if (IS_ENABLED(CONFIG_NOKIA_FAME_LK_FASTBOOT_CHAIN) &&
 		    of_machine_is_compatible("nokia,fame")) {
 			/* Chain a fixed-link U-Boot payload instead of Linux bootm. */
 			status |= env_set("fastboot_bootcmd",
