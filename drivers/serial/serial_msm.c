@@ -307,8 +307,11 @@ static int msm_serial_of_to_plat(struct udevice *dev)
 	ret = dev_read_u32(dev, "clock-frequency", &priv->clk_rate);
 	if (ret < 0) {
 		log_debug("No clock frequency specified, using default rate\n");
-		/* Default for APQ8016 */
-		priv->clk_rate = 7372800;
+		/* v1.3 uses fixed CSR 0xff, which expects a 1.8432 MHz clock. */
+		if (priv->regs->fixed_csr_115200)
+			priv->clk_rate = 1843200;
+		else
+			priv->clk_rate = 7372800;
 	}
 
 	return 0;

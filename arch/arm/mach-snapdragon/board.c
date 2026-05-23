@@ -25,7 +25,6 @@
 #include <linux/sizes.h>
 #include <lmb.h>
 #include <malloc.h>
-#include <fdt_support.h>
 #include <usb.h>
 #include <sort.h>
 #include <time.h>
@@ -410,6 +409,9 @@ static int get_cmdline_option(const char *cmdline, const char *key, char *out, i
 	const char *p, *p_end;
 	int len;
 
+	if (out_len <= 0)
+		return -EINVAL;
+
 	p = strstr(cmdline, key);
 	if (!p)
 		return -ENOENT;
@@ -417,11 +419,11 @@ static int get_cmdline_option(const char *cmdline, const char *key, char *out, i
 	p += strlen(key);
 	p_end = strstr(p, " ");
 	if (!p_end)
-		return -ENOENT;
+		p_end = p + strlen(p);
 
 	len = p_end - p;
-	if (len > out_len)
-		len = out_len;
+	if (len >= out_len)
+		len = out_len - 1;
 
 	strncpy(out, p, len);
 	out[len] = '\0';
@@ -450,14 +452,14 @@ static const char *get_cmdline(void)
 void qcom_set_serialno(void)
 {
 	const char *cmdline = get_cmdline();
-	char serial[32];
+	char serial[32] = { 0 };
 
-	if (!cmdline) {
+	if (!cmdline)
 		log_debug("Failed to get bootargs\n");
-		return;
-	}
+	else if (get_cmdline_option(cmdline, "androidboot.serialno=", serial,
+					 sizeof(serial)))
+		log_debug("Failed to get androidboot.serialno\n");
 
-	get_cmdline_option(cmdline, "androidboot.serialno=", serial, sizeof(serial));
 	if (serial[0] != '\0')
 		env_set("serial#", serial);
 }

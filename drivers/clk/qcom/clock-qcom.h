@@ -96,6 +96,7 @@ struct msm_clk_data {
 
 	int (*enable)(struct clk *clk);
 	unsigned long (*set_rate)(struct clk *clk, unsigned long rate);
+	unsigned long (*get_rate)(struct clk *clk);
 };
 
 struct msm_clk_priv {
