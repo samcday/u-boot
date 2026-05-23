@@ -25,6 +25,7 @@
 #include <linux/sizes.h>
 #include <lmb.h>
 #include <malloc.h>
+#include <mmc.h>
 #include <usb.h>
 #include <sort.h>
 #include <time.h>
@@ -464,6 +465,42 @@ void qcom_set_serialno(void)
 		env_set("serial#", serial);
 }
 
+static int qcom_set_expressltexx_serialno(void)
+{
+#if IS_ENABLED(CONFIG_MMC)
+	struct mmc *mmc;
+	u32 psn;
+
+	if (env_get("serial#"))
+		return 0;
+
+	if (!of_machine_is_compatible("samsung,expressltexx"))
+		return 0;
+
+	mmc = find_mmc_device(0);
+	if (!mmc) {
+		log_warning("Failed to find eMMC for serial number\n");
+		return -ENODEV;
+	}
+
+	if (mmc_init(mmc)) {
+		log_warning("Failed to initialize eMMC for serial number\n");
+		return -EIO;
+	}
+
+	/* Match LK's target_serialno(): use the 32-bit eMMC CID PSN. */
+	psn = ((mmc->cid[2] & 0xffff) << 16) |
+	      ((mmc->cid[3] >> 16) & 0xffff);
+	if (!psn) {
+		log_warning("eMMC CID PSN is zero\n");
+		return -EINVAL;
+	}
+
+	env_set_hex("serial#", psn);
+#endif
+	return 0;
+}
+
 /* Sets up the "board", and "soc" environment variables as well as constructing the devicetree
  * path, with a few quirks to handle non-standard dtb filenames. This is not meant to be a
  * comprehensive solution to automatically picking the DTB, but aims to be correct for the
@@ -573,6 +610,7 @@ static void configure_env(void)
 	env_set("fdtfile", dt_path);
 
 	qcom_set_serialno();
+	qcom_set_expressltexx_serialno();
 }
 
 void qcom_show_boot_source(void)
