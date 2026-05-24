@@ -15,6 +15,7 @@
 #include <usb.h>
 #include <usb/ehci-ci.h>
 #include <usb/ulpi.h>
+#include <reset.h>
 #include <wait_bit.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
@@ -29,6 +30,7 @@ struct msm_ehci_priv {
 
 struct qcom_ci_hdrc_priv {
 	struct clk_bulk clks;
+	struct reset_ctl_bulk resets;
 };
 
 static int msm_init_after_reset(struct ehci_ctrl *dev)
@@ -145,13 +147,38 @@ static int qcom_ci_hdrc_probe(struct udevice *dev)
 		return ret;
 	}
 
-	return clk_enable_bulk(&p->clks);
+	ret = clk_enable_bulk(&p->clks);
+	if (ret) {
+		dev_err(dev, "Failed to enable clocks: %d\n", ret);
+		return ret;
+	}
+
+	ret = reset_get_bulk(dev, &p->resets);
+	if (ret && (ret != -ENOSYS && ret != -ENOENT && ret != -ENODEV)) {
+		dev_err(dev, "Failed to get resets: %d\n", ret);
+		goto err_clks;
+	}
+
+	ret = reset_deassert_bulk(&p->resets);
+	if (ret) {
+		dev_err(dev, "Failed to deassert resets: %d\n", ret);
+		goto err_resets;
+	}
+
+	return 0;
+
+err_resets:
+	reset_release_bulk(&p->resets);
+err_clks:
+	clk_release_bulk(&p->clks);
+	return ret;
 }
 
 static int qcom_ci_hdrc_remove(struct udevice *dev)
 {
 	struct qcom_ci_hdrc_priv *p = dev_get_priv(dev);
 
+	reset_release_bulk(&p->resets);
 	return clk_release_bulk(&p->clks);
 }
 

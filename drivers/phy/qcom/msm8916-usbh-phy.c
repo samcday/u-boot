@@ -33,10 +33,16 @@ struct msm_phy_priv {
 	uint init_seq_num;
 };
 
+static int msm_phy_reset(struct phy *phy);
+
 static int msm_phy_power_on(struct phy *phy)
 {
 	struct msm_phy_priv *priv = dev_get_priv(phy->dev);
 	int i, ret;
+
+	ret = msm_phy_reset(phy);
+	if (ret)
+		return ret;
 
 	for (i = 0; i < priv->init_seq_num; i++) {
 		u8 *reg = (u8 *)(EXT_VENDOR_SPEC_OFFSET +
@@ -132,6 +138,7 @@ static int msm_phy_probe(struct udevice *dev)
 }
 
 static struct phy_ops msm_phy_ops = {
+	.init = msm_phy_reset,
 	.power_on = msm_phy_power_on,
 	.power_off = msm_phy_power_off,
 	.reset = msm_phy_reset,
