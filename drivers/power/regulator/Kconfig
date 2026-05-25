@@ -252,6 +252,16 @@ config DM_REGULATOR_QCOM_RPMH
 	  implements get/set api for a limited set of regulators used
 	  by u-boot.
 
+config DM_REGULATOR_QCOM_RPM
+	bool "Enable driver model for Qualcomm legacy RPM regulators"
+	depends on DM
+	select DM_PMIC
+	select DM_REGULATOR
+	---help---
+	  Enable support for old Qualcomm RPM-managed PMIC regulators. This is
+	  currently a narrow MSM8930/PM8038 implementation used by the Nokia
+	  Lumia 520/Fame display bring-up path.
+
 config DM_REGULATOR_QCOM_USB_VBUS
 	bool "Enable driver model for Qualcomm USB vbus regulator"
 	depends on DM_REGULATOR && DM_PMIC
