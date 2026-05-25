@@ -15,6 +15,8 @@
 #include <asm/io.h>
 #include <linux/delay.h>
 
+#define MSM8960_TLMM_PSHOLD_OFFSET	0x820
+
 struct qcom_pshold_priv {
 	phys_addr_t base;
 };
@@ -43,12 +45,13 @@ static int qcom_pshold_probe(struct udevice *dev)
 		return -EINVAL;
 
 	priv->base += offset;
-
 	return 0;
 }
 
 static const struct udevice_id qcom_pshold_ids[] = {
 	{ .compatible = "qcom,pshold", },
+	{ .compatible = "qcom,msm8960-pinctrl",
+	  .data = MSM8960_TLMM_PSHOLD_OFFSET },
 	{ /* sentinel */ }
 };
 
