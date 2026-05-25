@@ -193,6 +193,7 @@ config VIDEO_MIPI_DSI
 config VIDEO_QCOM_MSM8960_DSI
 	bool "Qualcomm MSM8960 DSI host"
 	depends on VIDEO_MIPI_DSI
+	select DM_REGULATOR_QCOM_RPM
 	help
 	  Enable the narrow MSM8960-family DSI host driver used by the Nokia
 	  Lumia 520/Fame MDP4 bring-up path.

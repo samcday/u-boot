@@ -17,6 +17,7 @@
 #include <log.h>
 #include <memalign.h>
 #include <mipi_dsi.h>
+#include <power/regulator.h>
 #include <string.h>
 #include <asm/io.h>
 #include <linux/bitops.h>
@@ -372,6 +373,51 @@ static int fame_pm8038_enable_display_rails(struct udevice *dev)
 	return 0;
 }
 
+static int qcom_msm8960_dsi_enable_supply(struct udevice *dev,
+					  const char *supply_name)
+{
+	struct udevice *supply;
+	int microvolts;
+	int ret;
+
+	ret = device_get_supply_regulator(dev, supply_name, &supply);
+	if (ret)
+		return ret;
+
+	microvolts = regulator_get_value(supply);
+	if (microvolts > 0) {
+		ret = regulator_set_value(supply, microvolts);
+		if (ret && ret != -ENOSYS)
+			return ret;
+	}
+
+	return regulator_set_enable_if_allowed(supply, true);
+}
+
+static int qcom_msm8960_dsi_enable_supplies(struct udevice *dev)
+{
+	static const char * const supplies[] = {
+		"vdda-supply",
+		"avdd-supply",
+		"vddio-supply",
+	};
+	int ret;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(supplies); i++) {
+		ret = qcom_msm8960_dsi_enable_supply(dev, supplies[i]);
+		if (ret) {
+			dev_warn(dev, "failed to enable %s via regulators: %d; using raw Fame RPM fallback\n",
+				 supplies[i], ret);
+			return fame_pm8038_enable_display_rails(dev);
+		}
+	}
+
+	mdelay(5);
+
+	return 0;
+}
+
 static int qcom_msm8960_dsi_program_mmcc(struct udevice *dev)
 {
 	int ret;
@@ -649,7 +695,7 @@ int qcom_msm8960_dsi_prepare(struct udevice *dev)
 	if (priv->prepared)
 		return 0;
 
-	ret = fame_pm8038_enable_display_rails(dev);
+	ret = qcom_msm8960_dsi_enable_supplies(dev);
 	if (ret)
 		return ret;
 
