@@ -72,12 +72,14 @@
 
 #define MMCC_AHB_EN_REG		0x0008
 #define MMCC_MAXI_EN_REG	0x0018
+#define MMCC_MDP_VSYNC_CC_REG	0x0058
 #define MMCC_MDP_CC_REG		0x00c0
 #define MMCC_MDP_MD0_REG	0x00c4
 #define MMCC_MDP_MD1_REG	0x00c8
 #define MMCC_MDP_NS_REG		0x00d0
 #define MMCC_MDP_PD_CTL_REG	0x0190
 #define MMCC_MDP_LUT_CC_REG	0x016c
+#define MMCC_DBG_BUS_VEC_B_REG	0x01cc
 #define MMCC_DBG_BUS_VEC_C_REG	0x01d0
 #define MMCC_DBG_BUS_VEC_E_REG	0x01d8
 #define MMCC_DBG_BUS_VEC_F_REG	0x01dc
@@ -108,6 +110,7 @@
 #define MMCC_MDP_CLK_BRANCH_EN	BIT(0)
 #define MMCC_MDP_CLK_ROOT_EN	BIT(2)
 #define MMCC_MDP_LUT_EN	BIT(0)
+#define MMCC_MDP_VSYNC_EN	BIT(6)
 
 #define MMCC_MDP_CC_BANK_SEL		BIT(11)
 #define MMCC_MDP_CC_BANK0_MND_EN	BIT(8)
@@ -135,6 +138,7 @@
 #define MMCC_MDP_AXI_RESET		BIT(13)
 #define MMCC_MDP_AHB_RESET		BIT(3)
 #define MMCC_MDP_RESET			BIT(21)
+#define MMCC_MDP_VSYNC_RESET		BIT(3)
 
 struct msm8960_rcg_rate {
 	uint rate;
@@ -382,8 +386,13 @@ static int msm8960_mmcc_wait_mdp_clocks(phys_addr_t base)
 	if (ret)
 		return ret;
 
-	return msm8960_mmcc_wait_halt(base, "mdp_lut_clk",
-				      MMCC_DBG_BUS_VEC_I_REG, 13);
+	ret = msm8960_mmcc_wait_halt(base, "mdp_lut_clk",
+				     MMCC_DBG_BUS_VEC_I_REG, 13);
+	if (ret)
+		return ret;
+
+	return msm8960_mmcc_wait_halt(base, "mdp_vsync_clk",
+				      MMCC_DBG_BUS_VEC_B_REG, 22);
 }
 
 static bool msm8960_mmcc_mdp_src_is_rate(phys_addr_t base, bool bank,
@@ -668,12 +677,14 @@ static const struct gate_clk msm8960_mmcc_clks[] = {
 	GATE_CLK(MDP_SRC, MMCC_MDP_CC_REG, MMCC_MDP_CLK_ROOT_EN),
 	GATE_CLK(MDP_CLK, MMCC_MDP_CC_REG, MMCC_MDP_CLK_BRANCH_EN),
 	GATE_CLK(MDP_LUT_CLK, MMCC_MDP_LUT_CC_REG, MMCC_MDP_LUT_EN),
+	GATE_CLK(MDP_VSYNC_CLK, MMCC_MDP_VSYNC_CC_REG, MMCC_MDP_VSYNC_EN),
 };
 
 static const struct qcom_reset_map msm8960_mmcc_resets[] = {
 	[MPD_AXI_RESET]	= { MMCC_SW_RESET_AXI_REG, 13 },
 	[MDP_AHB_RESET]	= { MMCC_SW_RESET_AHB_REG, 3 },
 	[MDP_RESET]	= { MMCC_SW_RESET_CORE_REG, 21 },
+	[MDP_VSYNC_RESET] = { MMCC_SW_RESET_CORE_REG, 3 },
 };
 
 static const struct qcom_power_map msm8960_mmcc_power_domains[] = {
@@ -703,6 +714,8 @@ static ulong msm8960_mmcc_clk_get_rate(struct clk *clk)
 	case MDP_CLK:
 	case MDP_LUT_CLK:
 		return MSM8960_MDP_RATE;
+	case MDP_VSYNC_CLK:
+		return 27000000;
 	default:
 		return 0;
 	}
@@ -736,6 +749,10 @@ static int msm8960_mmcc_clk_enable(struct clk *clk)
 		setbits_le32(base + MMCC_MDP_LUT_CC_REG, MMCC_MDP_LUT_EN);
 		return msm8960_mmcc_wait_halt(base, "mdp_lut_clk",
 					      MMCC_DBG_BUS_VEC_I_REG, 13);
+	case MDP_VSYNC_CLK:
+		setbits_le32(base + MMCC_MDP_VSYNC_CC_REG, MMCC_MDP_VSYNC_EN);
+		return msm8960_mmcc_wait_halt(base, "mdp_vsync_clk",
+					      MMCC_DBG_BUS_VEC_B_REG, 22);
 	case MDP_AXI_CLK:
 		setbits_le32(base + MMCC_MAXI_EN_REG, MMCC_MDP_AXI_EN);
 		return msm8960_mmcc_wait_halt(base, "mdp_axi_clk",
@@ -770,11 +787,13 @@ static int msm8960_mmcc_mdp_power_on(struct power_domain *pwr)
 	setbits_le32(base + MMCC_MDP_CC_REG,
 		     MMCC_MDP_CLK_ROOT_EN | MMCC_MDP_CLK_BRANCH_EN);
 	setbits_le32(base + MMCC_MDP_LUT_CC_REG, MMCC_MDP_LUT_EN);
+	setbits_le32(base + MMCC_MDP_VSYNC_CC_REG, MMCC_MDP_VSYNC_EN);
 
 	debug("%s: assert mdp resets\n", __func__);
 	setbits_le32(base + MMCC_SW_RESET_AXI_REG, MMCC_MDP_AXI_RESET);
 	setbits_le32(base + MMCC_SW_RESET_AHB_REG, MMCC_MDP_AHB_RESET);
-	setbits_le32(base + MMCC_SW_RESET_CORE_REG, MMCC_MDP_RESET);
+	setbits_le32(base + MMCC_SW_RESET_CORE_REG,
+		     MMCC_MDP_RESET | MMCC_MDP_VSYNC_RESET);
 	udelay(1);
 
 	debug("%s: gdsc clamp\n", __func__);
@@ -794,7 +813,8 @@ static int msm8960_mmcc_mdp_power_on(struct power_domain *pwr)
 	debug("%s: deassert mdp resets\n", __func__);
 	clrbits_le32(base + MMCC_SW_RESET_AXI_REG, MMCC_MDP_AXI_RESET);
 	clrbits_le32(base + MMCC_SW_RESET_AHB_REG, MMCC_MDP_AHB_RESET);
-	clrbits_le32(base + MMCC_SW_RESET_CORE_REG, MMCC_MDP_RESET);
+	clrbits_le32(base + MMCC_SW_RESET_CORE_REG,
+		     MMCC_MDP_RESET | MMCC_MDP_VSYNC_RESET);
 
 	debug("%s: wait mdp clocks\n", __func__);
 	ret = msm8960_mmcc_wait_mdp_clocks(base);
