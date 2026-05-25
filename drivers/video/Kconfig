@@ -197,6 +197,25 @@ config VIDEO_QCOM_MSM8960_DSI
 	  Enable the narrow MSM8960-family DSI host driver used by the Nokia
 	  Lumia 520/Fame MDP4 bring-up path.
 
+config VIDEO_QCOM_MDP4
+	bool "Qualcomm MSM8960 MDP4 display controller"
+	depends on VIDEO
+	select PANEL
+	select VIDEO_MIPI_DSI
+	select VIDEO_QCOM_MSM8960_DSI
+	select VIDEO_LCD_NOKIA_TEISKO
+	help
+	  Enable the narrow MSM8960-family MDP4 video driver used by the Nokia
+	  Lumia 520/Fame bring-up path.
+
+config VIDEO_QCOM_MDP4_FAME_AUTOSTART
+	bool "Start the Nokia Fame MDP4/DSI panel from the video driver"
+	depends on VIDEO_QCOM_MDP4
+	help
+	  Automatically run the proven Fame MDP4 + DSI + Teisko panel sequence
+	  when the MDP4 video driver probes. Leave this off while using the
+	  fame_mdp diagnostic command as the golden bring-up path.
+
 config CONSOLE_NORMAL
 	bool "Support a simple text console"
 	default y
