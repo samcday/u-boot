@@ -64,7 +64,10 @@
 #endif
 
 #define MSM8960_GCC_BASE	0x00900000
-#define MSM8960_MDP_RATE	128000000
+#define MSM8960_MDP_PLL8_RATE	128000000
+#define MSM8960_MDP_RATE	200000000
+#define MSM8960_PLL2_RATE	800000000
+#define MSM8960_PLL2_LOCK_TIMEOUT_US	200
 #define MSM8960_PLL8_LOCK_TIMEOUT_US	2000
 
 #define MMCC_AHB_EN_REG		0x0008
@@ -82,6 +85,23 @@
 #define MMCC_SW_RESET_AXI_REG	0x0208
 #define MMCC_SW_RESET_AHB_REG	0x020c
 #define MMCC_SW_RESET_CORE_REG	0x0210
+#define MMCC_MM_PLL1_MODE_REG	0x031c
+#define MMCC_MM_PLL1_L_REG	0x0320
+#define MMCC_MM_PLL1_M_REG	0x0324
+#define MMCC_MM_PLL1_N_REG	0x0328
+#define MMCC_MM_PLL1_CONFIG_REG	0x032c
+#define MMCC_MM_PLL1_STATUS_REG	0x0334
+
+#define MMCC_PLL_OUTCTRL	BIT(0)
+#define MMCC_PLL_BYPASSNL	BIT(1)
+#define MMCC_PLL_RESET_N	BIT(2)
+#define MMCC_PLL_ENABLE_MASK	(MMCC_PLL_OUTCTRL | MMCC_PLL_BYPASSNL | \
+				 MMCC_PLL_RESET_N)
+#define MMCC_PLL2_L_VAL		0x1d
+#define MMCC_PLL2_M_VAL		0x11
+#define MMCC_PLL2_N_VAL		0x1b
+#define MMCC_PLL2_CONFIG_VAL	0x00c20000
+#define MMCC_PLL2_STATUS_RUNNING	BIT(0)
 
 #define MMCC_MDP_AHB_EN	BIT(10)
 #define MMCC_MDP_AXI_EN	BIT(23)
@@ -103,6 +123,7 @@
 #define MMCC_MDP_NS_BANK1_N_MASK	GENMASK(21, 14)
 #define MMCC_MDP_NS_BANK0_SRC_MASK	GENMASK(5, 3)
 #define MMCC_MDP_NS_BANK1_SRC_MASK	GENMASK(2, 0)
+#define MMCC_MDP_SRC_PLL2_CFG		1
 #define MMCC_MDP_SRC_PLL8_CFG		2
 
 #define MMCC_MDP_PD_DELAY_MASK		GENMASK(4, 0)
@@ -120,6 +141,14 @@ struct msm8960_rcg_rate {
 	u32 md;
 	u32 ns;
 	bool mnd_enable;
+};
+
+struct msm8960_mdp_src_cfg {
+	uint rate;
+	u8 src;
+	u8 m;
+	u8 n;
+	const char *name;
 };
 
 static const struct pll_vote_clk pll8_vote_clk = {
@@ -186,10 +215,75 @@ static int msm8960_enable_gsbi5_h_clk(phys_addr_t base)
 	return msm8960_branch_wait(base, GSBI5_H_HALT_BIT);
 }
 
+static const struct msm8960_mdp_src_cfg msm8960_mdp_pll8_cfg = {
+	.rate = MSM8960_MDP_PLL8_RATE,
+	.src = MMCC_MDP_SRC_PLL8_CFG,
+	.m = 1,
+	.n = 3,
+	.name = "pll8",
+};
+
+static const struct msm8960_mdp_src_cfg msm8960_mdp_pll2_cfg = {
+	.rate = MSM8960_MDP_RATE,
+	.src = MMCC_MDP_SRC_PLL2_CFG,
+	.m = 1,
+	.n = 4,
+	.name = "pll2",
+};
+
 static void msm8960_flush_write(phys_addr_t base, uint reg, u32 val)
 {
 	writel(val, base + reg);
 	readl(base + reg);
+}
+
+static int msm8960_mmcc_enable_pll2(phys_addr_t base)
+{
+	u32 mode, status;
+	int i;
+
+	mode = readl(base + MMCC_MM_PLL1_MODE_REG);
+	status = readl(base + MMCC_MM_PLL1_STATUS_REG);
+	debug("%s: enter mode=%08x status=%08x l=%08x m=%08x n=%08x config=%08x\n",
+	      __func__, mode, status, readl(base + MMCC_MM_PLL1_L_REG),
+	      readl(base + MMCC_MM_PLL1_M_REG),
+	      readl(base + MMCC_MM_PLL1_N_REG),
+	      readl(base + MMCC_MM_PLL1_CONFIG_REG));
+
+	if ((mode & MMCC_PLL_ENABLE_MASK) == MMCC_PLL_ENABLE_MASK &&
+	    (status & MMCC_PLL2_STATUS_RUNNING)) {
+		debug("%s: already running\n", __func__);
+		return 0;
+	}
+
+	msm8960_flush_write(base, MMCC_MM_PLL1_MODE_REG, 0);
+	msm8960_flush_write(base, MMCC_MM_PLL1_L_REG, MMCC_PLL2_L_VAL);
+	msm8960_flush_write(base, MMCC_MM_PLL1_M_REG, MMCC_PLL2_M_VAL);
+	msm8960_flush_write(base, MMCC_MM_PLL1_N_REG, MMCC_PLL2_N_VAL);
+	msm8960_flush_write(base, MMCC_MM_PLL1_CONFIG_REG,
+			    MMCC_PLL2_CONFIG_VAL);
+
+	msm8960_flush_write(base, MMCC_MM_PLL1_MODE_REG,
+			    MMCC_PLL_BYPASSNL | MMCC_PLL_RESET_N);
+
+	for (i = 0; i < MSM8960_PLL2_LOCK_TIMEOUT_US; i++) {
+		status = readl(base + MMCC_MM_PLL1_STATUS_REG);
+		if (status & MMCC_PLL2_STATUS_RUNNING) {
+			msm8960_flush_write(base, MMCC_MM_PLL1_MODE_REG,
+					    MMCC_PLL_ENABLE_MASK);
+			debug("%s: running after %d us mode=%08x status=%08x\n",
+			      __func__, i,
+			      readl(base + MMCC_MM_PLL1_MODE_REG), status);
+			return 0;
+		}
+		udelay(1);
+	}
+
+	mode = readl(base + MMCC_MM_PLL1_MODE_REG);
+	log_err("%s: PLL2 enable timed out mode=%08x status=%08x\n",
+		__func__, mode, status);
+
+	return -ETIMEDOUT;
 }
 
 static int msm8960_mmcc_enable_pll8_vote(void)
@@ -223,6 +317,27 @@ static int msm8960_mmcc_enable_pll8_vote(void)
 		__func__, status, vote);
 
 	return -ETIMEDOUT;
+}
+
+static const struct msm8960_mdp_src_cfg *
+msm8960_mmcc_find_mdp_src_cfg(ulong rate)
+{
+	if (rate && rate <= MSM8960_MDP_PLL8_RATE)
+		return &msm8960_mdp_pll8_cfg;
+	if (!rate || rate <= MSM8960_MDP_RATE)
+		return &msm8960_mdp_pll2_cfg;
+
+	return NULL;
+}
+
+static u32 msm8960_mmcc_mdp_md_val(const struct msm8960_mdp_src_cfg *cfg)
+{
+	return ((u32)cfg->m << 8) | ((~cfg->n) & 0xff);
+}
+
+static u32 msm8960_mmcc_mdp_ns_n_val(const struct msm8960_mdp_src_cfg *cfg)
+{
+	return (~(cfg->n - cfg->m)) & 0xff;
 }
 
 static int msm8960_mmcc_wait_halt(phys_addr_t base, const char *name,
@@ -271,7 +386,8 @@ static int msm8960_mmcc_wait_mdp_clocks(phys_addr_t base)
 				      MMCC_DBG_BUS_VEC_I_REG, 13);
 }
 
-static bool msm8960_mmcc_mdp_src_is_128mhz(phys_addr_t base, bool bank)
+static bool msm8960_mmcc_mdp_src_is_rate(phys_addr_t base, bool bank,
+					 const struct msm8960_mdp_src_cfg *cfg)
 {
 	u32 ns = readl(base + MMCC_MDP_NS_REG);
 	u32 md, n_mask, src_mask;
@@ -293,15 +409,17 @@ static bool msm8960_mmcc_mdp_src_is_128mhz(phys_addr_t base, bool bank)
 
 	md = readl(base + md_reg);
 
-	return (md & 0x1ff) == 0x1fc &&
-	       ((ns & n_mask) >> n_shift) == ((~(3 - 1)) & 0xff) &&
-	       ((ns & src_mask) >> src_shift) == MMCC_MDP_SRC_PLL8_CFG;
+	return (md & 0xffff) == msm8960_mmcc_mdp_md_val(cfg) &&
+	       ((ns & n_mask) >> n_shift) ==
+		       msm8960_mmcc_mdp_ns_n_val(cfg) &&
+	       ((ns & src_mask) >> src_shift) == cfg->src;
 }
 
 static ulong msm8960_mmcc_set_mdp_src_rate(phys_addr_t base, ulong rate)
 {
 	u32 cc = readl(base + MMCC_MDP_CC_REG);
 	u32 ns = readl(base + MMCC_MDP_NS_REG);
+	const struct msm8960_mdp_src_cfg *cfg;
 	u32 rst_mask, n_mask, src_mask, mode_mask, mode_dual, mnd_en;
 	uint n_shift, src_shift, md_reg;
 	bool bank, new_bank, enabled;
@@ -311,26 +429,33 @@ static ulong msm8960_mmcc_set_mdp_src_rate(phys_addr_t base, ulong rate)
 	debug("%s: base=%#llx rate=%lu cc=%08x ns=%08x\n", __func__,
 	      (unsigned long long)base, rate, cc, ns);
 
-	if (rate && rate > MSM8960_MDP_RATE) {
+	cfg = msm8960_mmcc_find_mdp_src_cfg(rate);
+	if (!cfg) {
 		debug("%s: rejecting rate=%lu\n", __func__, rate);
 		return 0;
 	}
 
-	ret = msm8960_mmcc_enable_pll8_vote();
-	if (ret)
-		return 0;
+	if (cfg->src == MMCC_MDP_SRC_PLL2_CFG) {
+		ret = msm8960_mmcc_enable_pll2(base);
+		if (ret)
+			return 0;
+	} else {
+		ret = msm8960_mmcc_enable_pll8_vote();
+		if (ret)
+			return 0;
+	}
 
 	enabled = cc & MMCC_MDP_CLK_ROOT_EN;
 	bank = cc & MMCC_MDP_CC_BANK_SEL;
-	if (enabled && msm8960_mmcc_mdp_src_is_128mhz(base, bank)) {
-		debug("%s: already at %u Hz on bank %u\n", __func__,
-		      MSM8960_MDP_RATE, bank);
-		return MSM8960_MDP_RATE;
+	if (enabled && msm8960_mmcc_mdp_src_is_rate(base, bank, cfg)) {
+		debug("%s: already at %u Hz from %s on bank %u\n", __func__,
+		      cfg->rate, cfg->name, bank);
+		return cfg->rate;
 	}
 
 	new_bank = enabled ? !bank : bank;
-	debug("%s: programming bank %u enabled=%u old_bank=%u\n", __func__,
-	      new_bank, enabled, bank);
+	debug("%s: programming bank %u enabled=%u old_bank=%u rate=%u src=%s\n",
+	      __func__, new_bank, enabled, bank, cfg->rate, cfg->name);
 
 	if (new_bank) {
 		rst_mask = MMCC_MDP_NS_BANK1_RST;
@@ -355,17 +480,17 @@ static ulong msm8960_mmcc_set_mdp_src_rate(phys_addr_t base, ulong rate)
 	}
 
 	/*
-	 * 384 MHz PLL8 * 1 / 3 = 128 MHz. The legacy M/N/D encoding stores
-	 * NOT(N) in MD[7:0] and NOT(N-M) in NS.
+	 * The legacy M/N/D encoding stores NOT(N) in MD[7:0] and
+	 * NOT(N-M) in NS.
 	 */
 	msm8960_flush_write(base, MMCC_MDP_NS_REG, ns | rst_mask);
-	msm8960_flush_write(base, md_reg, 0x000001fc);
+	msm8960_flush_write(base, md_reg, msm8960_mmcc_mdp_md_val(cfg));
 
 	ns = readl(base + MMCC_MDP_NS_REG);
 	ns &= ~(n_mask | src_mask);
-	n_val = (~(3 - 1)) & 0xff;
+	n_val = msm8960_mmcc_mdp_ns_n_val(cfg);
 	ns |= n_val << n_shift;
-	ns |= MMCC_MDP_SRC_PLL8_CFG << src_shift;
+	ns |= cfg->src << src_shift;
 	msm8960_flush_write(base, MMCC_MDP_NS_REG, ns);
 
 	cc = readl(base + MMCC_MDP_CC_REG);
@@ -388,7 +513,7 @@ static ulong msm8960_mmcc_set_mdp_src_rate(phys_addr_t base, ulong rate)
 	      readl(base + MMCC_MDP_CC_REG), readl(base + MMCC_MDP_NS_REG),
 	      readl(base + MMCC_MDP_MD0_REG), readl(base + MMCC_MDP_MD1_REG));
 
-	return MSM8960_MDP_RATE;
+	return cfg->rate;
 }
 
 static const struct msm8960_rcg_rate *msm8960_find_rate(
