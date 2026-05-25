@@ -133,11 +133,16 @@ fixnext:
 	blo	fixloop
 
 relocate_done:
-#if defined(CONFIG_CPU_V7A) && !CONFIG_IS_ENABLED(SYS_ICACHE_OFF)
+#if defined(CONFIG_CPU_V7A)
 	/*
 	 * Make the copied image visible to instruction fetch before returning
-	 * to relocated code. c_runtime_cpu_setup() runs after this branch.
+	 * to relocated code. c_runtime_cpu_setup() runs after this branch, and
+	 * an earlier stage may have left caches enabled even for builds which
+	 * do not enable D-cache themselves.
 	 */
+	push	{lr}
+	bl	v7_flush_dcache_all
+	pop	{lr}
 	mov	r0, #0
 	mcr	p15, 0, r0, c7, c5, 0	@ invalidate icache
 	mcr	p15, 0, r0, c7, c5, 6	@ invalidate BP array
