@@ -133,6 +133,17 @@ fixnext:
 	blo	fixloop
 
 relocate_done:
+#if defined(CONFIG_CPU_V7A) && !CONFIG_IS_ENABLED(SYS_ICACHE_OFF)
+	/*
+	 * Make the copied image visible to instruction fetch before returning
+	 * to relocated code. c_runtime_cpu_setup() runs after this branch.
+	 */
+	mov	r0, #0
+	mcr	p15, 0, r0, c7, c5, 0	@ invalidate icache
+	mcr	p15, 0, r0, c7, c5, 6	@ invalidate BP array
+	dsb
+	isb
+#endif
 	ret	lr
 
 ENDPROC(relocate_code)
