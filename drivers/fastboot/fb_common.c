@@ -153,6 +153,9 @@ void fastboot_boot(void)
 {
 	char *s;
 
+	if (IS_ENABLED(CONFIG_CMD_ABOOTIMG))
+		set_abootimg_addr((ulong)fastboot_buf_addr);
+
 	s = env_get("fastboot_bootcmd");
 	if (s) {
 		run_command(s, CMD_FLAG_ENV);
@@ -161,9 +164,6 @@ void fastboot_boot(void)
 		static char *const bootm_args[] = {
 			"bootm", boot_addr_start, NULL
 		};
-
-		if (IS_ENABLED(CONFIG_CMD_ABOOTIMG))
-			set_abootimg_addr((ulong)fastboot_buf_addr);
 
 		snprintf(boot_addr_start, sizeof(boot_addr_start) - 1,
 			 "0x%p", fastboot_buf_addr);
