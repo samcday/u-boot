@@ -12,6 +12,8 @@
  * Based on Little Kernel driver, simplified
  */
 
+#define LOG_DEBUG
+
 #include <clk-uclass.h>
 #include <linux/clk-provider.h>
 #include <dm.h>
@@ -233,11 +235,17 @@ static int msm_clk_probe(struct udevice *dev)
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(dev);
 	struct msm_clk_priv *priv = dev_get_priv(dev);
 
+	debug("%s: dev=%s data=%p\n", __func__, dev->name, data);
+
 	priv->base = dev_read_addr(dev);
-	if (priv->base == FDT_ADDR_T_NONE)
+	if (priv->base == FDT_ADDR_T_NONE) {
+		debug("%s: dev=%s has no MMIO address\n", __func__, dev->name);
 		return -EINVAL;
+	}
 
 	priv->data = data;
+	debug("%s: dev=%s base=%#llx\n", __func__, dev->name,
+	      (unsigned long long)priv->base);
 
 	return 0;
 }
@@ -245,6 +253,9 @@ static int msm_clk_probe(struct udevice *dev)
 static ulong msm_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(clk->dev);
+
+	debug("%s: dev=%s id=%lu rate=%lu\n", __func__, clk->dev->name,
+	      clk->id, rate);
 
 	if (data->set_rate)
 		return data->set_rate(clk, rate);
@@ -265,6 +276,8 @@ static ulong msm_clk_get_rate(struct clk *clk)
 static int msm_clk_enable(struct clk *clk)
 {
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(clk->dev);
+
+	debug("%s: dev=%s id=%lu\n", __func__, clk->dev->name, clk->id);
 
 	if (data->enable)
 		return data->enable(clk);
@@ -412,21 +425,34 @@ int qcom_cc_bind(struct udevice *parent)
 	struct driver *drv;
 	int ret;
 
+	debug("%s: parent=%s data=%p addr=%#llx clks=%lu resets=%lu pds=%lu\n",
+	      __func__, parent->name, data,
+	      (unsigned long long)dev_read_addr(parent),
+	      data ? data->num_clks : 0,
+	      data ? data->num_resets : 0,
+	      data ? data->num_power_domains : 0);
+
 	/* Get a handle to the common clk handler */
 	drv = lists_driver_lookup_name("qcom_clk");
-	if (!drv)
+	if (!drv) {
+		debug("%s: missing qcom_clk driver\n", __func__);
 		return -ENOENT;
+	}
 
 	/* Register the clock controller */
 	ret = device_bind_with_driver_data(parent, drv, "qcom_clk", (ulong)data,
 					   dev_ofnode(parent), &clkdev);
-	if (ret)
+	if (ret) {
+		debug("%s: failed to bind qcom_clk ret=%d\n", __func__, ret);
 		return ret;
+	}
+	debug("%s: bound qcom_clk under %s\n", __func__, parent->name);
 
 	if (data->resets) {
 		/* Get a handle to the common reset handler */
 		drv = lists_driver_lookup_name("qcom_reset");
 		if (!drv) {
+			debug("%s: missing qcom_reset driver\n", __func__);
 			ret = -ENOENT;
 			goto unbind_clkdev;
 		}
@@ -434,23 +460,32 @@ int qcom_cc_bind(struct udevice *parent)
 		/* Register the reset controller */
 		ret = device_bind_with_driver_data(parent, drv, "qcom_reset", (ulong)data,
 						   dev_ofnode(parent), &rstdev);
-		if (ret)
+		if (ret) {
+			debug("%s: failed to bind qcom_reset ret=%d\n", __func__, ret);
 			goto unbind_clkdev;
+		}
+		debug("%s: bound qcom_reset under %s\n", __func__, parent->name);
 	}
 
 	if (data->power_domains) {
 		/* Get a handle to the common power domain handler */
 		drv = lists_driver_lookup_name("qcom_power");
 		if (!drv) {
+			debug("%s: missing qcom_power driver\n", __func__);
 			ret = -ENOENT;
 			goto unbind_rstdev;
 		}
 		/* Register the power domain controller */
 		ret = device_bind_with_driver_data(parent, drv, "qcom_power", (ulong)data,
 						   dev_ofnode(parent), &pwrdev);
-		if (ret)
+		if (ret) {
+			debug("%s: failed to bind qcom_power ret=%d\n", __func__, ret);
 			goto unbind_rstdev;
+		}
+		debug("%s: bound qcom_power under %s\n", __func__, parent->name);
 	}
+
+	debug("%s: parent=%s done\n", __func__, parent->name);
 
 	return 0;
 
@@ -521,6 +556,15 @@ static int qcom_power_set(struct power_domain *pwr, bool on)
 	u32 value;
 	int ret;
 
+	debug("%s: dev=%s id=%lu on=%d data=%p base=%p\n", __func__,
+	      pwr->dev->name, pwr->id, on, data, base);
+
+	if (on && data->power_on)
+		return data->power_on(pwr);
+
+	if (!on && data->power_off)
+		return data->power_off(pwr);
+
 	if (pwr->id >= data->num_power_domains)
 		return -ENODEV;
 
@@ -577,6 +621,8 @@ static int qcom_power_probe(struct udevice *dev)
 {
 	/* Set our priv pointer to the base address */
 	dev_set_priv(dev, (void *)dev_read_addr(dev));
+	debug("%s: dev=%s base=%#llx\n", __func__, dev->name,
+	      (unsigned long long)dev_read_addr(dev));
 
 	return 0;
 }

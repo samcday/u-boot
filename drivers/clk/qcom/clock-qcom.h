@@ -79,6 +79,7 @@ struct qcom_power_map {
 };
 
 struct clk;
+struct power_domain;
 
 struct msm_clk_data {
 	const struct qcom_power_map	*power_domains;
@@ -97,6 +98,8 @@ struct msm_clk_data {
 	int (*enable)(struct clk *clk);
 	unsigned long (*set_rate)(struct clk *clk, unsigned long rate);
 	unsigned long (*get_rate)(struct clk *clk);
+	int (*power_on)(struct power_domain *pwr);
+	int (*power_off)(struct power_domain *pwr);
 };
 
 struct msm_clk_priv {

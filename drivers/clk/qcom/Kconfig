@@ -56,12 +56,12 @@ config CLK_QCOM_MILOS
 	  and resets exposed by the GCC hardware block.
 
 config CLK_QCOM_MSM8960
-	bool "Qualcomm MSM8960 GCC"
+	bool "Qualcomm MSM8960 GCC/MMCC"
 	select CLK_QCOM
 	help
-	  Say Y here to enable support for the Global Clock Controller
-	  on the Snapdragon MSM8960 SoC. This driver supports the clocks
-	  and resets exposed by the GCC hardware block.
+	  Say Y here to enable support for the Global and Multimedia Clock
+	  Controllers on the Snapdragon MSM8960 SoC. This driver supports the
+	  clocks and resets exposed by the GCC and MMCC hardware blocks.
 
 config CLK_QCOM_QCM2290
 	bool "Qualcomm QCM2290 GCC"
