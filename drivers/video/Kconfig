@@ -190,6 +190,13 @@ config VIDEO_MIPI_DSI
 	  The MIPI Display Serial Interface (MIPI DSI) defines a high-speed
 	  serial interface between a host processor and a display module.
 
+config VIDEO_QCOM_MSM8960_DSI
+	bool "Qualcomm MSM8960 DSI host"
+	depends on VIDEO_MIPI_DSI
+	help
+	  Enable the narrow MSM8960-family DSI host driver used by the Nokia
+	  Lumia 520/Fame MDP4 bring-up path.
+
 config CONSOLE_NORMAL
 	bool "Support a simple text console"
 	default y
