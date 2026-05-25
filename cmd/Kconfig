@@ -2384,7 +2384,7 @@ config CMD_BSP
 
 config CMD_FAME_MDP
 	bool "fame_mdp - Nokia Fame MDP4 diagnostics"
-	depends on ARCH_SNAPDRAGON_ARM32
+	depends on ARCH_SNAPDRAGON_ARM32 || TARGET_EFI_ARM_APP32
 	help
 	  Enable a Nokia Lumia 520 / Fame diagnostic command that sequences
 	  the MSM8227 MDP4 clocks and footswitch before reading the MDP4
