@@ -365,13 +365,6 @@ static void qcom_mdp4_program_teisko(struct qcom_mdp4_priv *priv,
 	qcom_mdp4_write(priv, MDP_OVERLAY_FLUSH_REG, BIT(0) | BIT(4));
 }
 
-static void qcom_mdp4_disable_dsi_assigned_clocks(ofnode dsi_node)
-{
-	ofnode_delete_prop(dsi_node, "assigned-clocks");
-	ofnode_delete_prop(dsi_node, "assigned-clock-parents");
-	ofnode_delete_prop(dsi_node, "assigned-clock-rates");
-}
-
 static int qcom_mdp4_connect_panel(struct udevice *dev)
 {
 	struct qcom_mdp4_priv *priv = dev_get_priv(dev);
@@ -389,7 +382,6 @@ static int qcom_mdp4_connect_panel(struct udevice *dev)
 			return ret;
 		}
 
-		qcom_mdp4_disable_dsi_assigned_clocks(dsi_node);
 		ret = device_get_global_by_ofnode(dsi_node, &priv->dsi);
 		if (ret == -ENOENT) {
 			ret = device_find_global_by_ofnode(ofnode_get_parent(dsi_node),

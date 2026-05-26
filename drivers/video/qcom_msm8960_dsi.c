@@ -9,6 +9,7 @@
 
 #define LOG_CATEGORY UCLASS_DSI_HOST
 
+#include <clk-uclass.h>
 #include <cpu_func.h>
 #include <dm.h>
 #include <dm/device_compat.h>
@@ -847,6 +848,39 @@ static int qcom_msm8960_dsi_host_enable(struct udevice *dev)
 static const struct dsi_host_ops qcom_msm8960_dsi_ops = {
 	.init = qcom_msm8960_dsi_host_init,
 	.enable = qcom_msm8960_dsi_host_enable,
+};
+
+/*
+ * The APQ8064/MSM8960 DT models the 28nm DSI PLL as a clock provider used
+ * by the DSI controller's assigned-clock-parents. Fame programs the PLL and
+ * link clocks directly for now, but the provider still needs to exist so the
+ * generic assigned-clocks parser can consume the DT without rewriting it.
+ */
+static int qcom_msm8960_dsi_phy_clk_enable(struct clk *clk)
+{
+	return 0;
+}
+
+static ulong qcom_msm8960_dsi_phy_clk_get_rate(struct clk *clk)
+{
+	return 0;
+}
+
+static const struct clk_ops qcom_msm8960_dsi_phy_clk_ops = {
+	.enable = qcom_msm8960_dsi_phy_clk_enable,
+	.get_rate = qcom_msm8960_dsi_phy_clk_get_rate,
+};
+
+static const struct udevice_id qcom_msm8960_dsi_phy_clk_ids[] = {
+	{ .compatible = "qcom,dsi-phy-28nm-8960" },
+	{ }
+};
+
+U_BOOT_DRIVER(qcom_msm8960_dsi_phy_clk) = {
+	.name		= "qcom_msm8960_dsi_phy_clk",
+	.id		= UCLASS_CLK,
+	.of_match	= qcom_msm8960_dsi_phy_clk_ids,
+	.ops		= &qcom_msm8960_dsi_phy_clk_ops,
 };
 
 static int qcom_msm8960_dsi_probe(struct udevice *dev)
