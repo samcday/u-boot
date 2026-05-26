@@ -394,29 +394,42 @@ static int qcom_mdp4_autostart(struct udevice *dev)
 	int ret;
 
 	ret = qcom_mdp4_enable_resources(dev);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "failed to enable MDP4 resources: %d\n", ret);
 		return ret;
+	}
 
-	if (readl(priv->base + MDP_VERSION_REG) != MDP_EXPECTED_VERSION)
+	if (readl(priv->base + MDP_VERSION_REG) != MDP_EXPECTED_VERSION) {
+		dev_err(dev, "unexpected MDP version: %08x\n",
+			readl(priv->base + MDP_VERSION_REG));
 		return -ENODEV;
+	}
 
 	ret = qcom_mdp4_connect_panel(dev);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "failed to connect DSI panel: %d\n", ret);
 		return ret;
+	}
 
 	ret = qcom_msm8960_dsi_prepare(priv->dsi);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "failed to prepare DSI host: %d\n", ret);
 		return ret;
+	}
 
 	ret = nokia_teisko_panel_prepare(priv->panel);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "failed to prepare Teisko panel: %d\n", ret);
 		return ret;
+	}
 
 	qcom_mdp4_program_teisko(priv, QCOM_MSM8960_TEISKO_FB_BASE);
 
 	ret = nokia_teisko_panel_enable(priv->panel);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "failed to enable Teisko panel: %d\n", ret);
 		return ret;
+	}
 
 	return qcom_msm8960_dsi_enable_video(priv->dsi);
 }

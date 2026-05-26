@@ -880,6 +880,7 @@ U_BOOT_DRIVER(qcom_msm8960_dsi) = {
 	.name		= "qcom_msm8960_dsi",
 	.id		= UCLASS_DSI_HOST,
 	.of_match	= qcom_msm8960_dsi_ids,
+	.bind		= dm_scan_fdt_dev,
 	.probe		= qcom_msm8960_dsi_probe,
 	.ops		= &qcom_msm8960_dsi_ops,
 	.priv_auto	= sizeof(struct qcom_msm8960_dsi_priv),
