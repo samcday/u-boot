@@ -14,6 +14,8 @@
 #include <dm.h>
 #include <dm/device-internal.h>
 #include <dm/device_compat.h>
+#include <dm/lists.h>
+#include <dm/ofnode_graph.h>
 #include <dm/read.h>
 #include <dm/uclass.h>
 #include <errno.h>
@@ -368,9 +370,42 @@ static int qcom_mdp4_connect_panel(struct udevice *dev)
 	struct qcom_mdp4_priv *priv = dev_get_priv(dev);
 	struct mipi_dsi_panel_plat *mplat;
 	struct mipi_dsi_device *dsi;
+	struct udevice *parent;
+	ofnode dsi_node;
 	int ret;
 
 	ret = uclass_get_device(UCLASS_DSI_HOST, 0, &priv->dsi);
+	if (ret == -ENODEV) {
+		dsi_node = ofnode_graph_get_remote_node(dev_ofnode(dev), 1, -1);
+		if (!ofnode_valid(dsi_node)) {
+			dev_err(dev, "failed to find DSI host graph node\n");
+			return ret;
+		}
+
+		ret = device_get_global_by_ofnode(dsi_node, &priv->dsi);
+		if (ret == -ENOENT) {
+			ret = device_find_global_by_ofnode(ofnode_get_parent(dsi_node),
+							   &parent);
+			if (ret) {
+				dev_err(dev, "failed to find DSI host parent: %d\n",
+					ret);
+				return ret;
+			}
+
+			ret = lists_bind_fdt(parent, dsi_node, &priv->dsi, NULL,
+					     false);
+			if (ret) {
+				dev_err(dev, "failed to bind DSI host: %d\n", ret);
+				return ret;
+			}
+			if (!priv->dsi) {
+				dev_err(dev, "DSI host node had no matching driver\n");
+				return -ENODEV;
+			}
+
+			ret = device_probe(priv->dsi);
+		}
+	}
 	if (ret) {
 		dev_err(dev, "failed to get DSI host: %d\n", ret);
 		return ret;
