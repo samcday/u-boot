@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0+
 
-#define LOG_DEBUG
-
 #include <clk-uclass.h>
 #include <dm.h>
 #include <errno.h>
