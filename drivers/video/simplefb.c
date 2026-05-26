@@ -19,7 +19,7 @@ static int simple_video_probe(struct udevice *dev)
 	int ret;
 	fdt_addr_t base;
 	fdt_size_t size;
-	u32 width, height, stride, rot;
+	u32 width, height, stride, rot = 0;
 
 	base = dev_read_addr_size(dev, &size);
 	if (base == FDT_ADDR_T_NONE) {
