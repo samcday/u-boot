@@ -640,6 +640,22 @@ void __weak qcom_late_init(void)
 {
 }
 
+static void qcom_probe_fame_video(void)
+{
+#if CONFIG_IS_ENABLED(VIDEO_QCOM_MDP4_FAME_AUTOSTART)
+	struct udevice *dev;
+	int ret;
+
+	if (!of_machine_is_compatible("nokia,fame"))
+		return;
+
+	printf("QCOM: probing Fame MDP4 display autostart\n");
+	ret = uclass_first_device_err(UCLASS_VIDEO, &dev);
+	if (ret)
+		printf("QCOM: Fame MDP4 display probe failed: %d\n", ret);
+#endif
+}
+
 #define KERNEL_COMP_SIZE	SZ_64M
 #ifdef CONFIG_FASTBOOT_BUF_SIZE
 #define FASTBOOT_BUF_SIZE CONFIG_FASTBOOT_BUF_SIZE
@@ -712,6 +728,7 @@ int board_late_init(void)
 
 	configure_env();
 	qcom_late_init();
+	qcom_probe_fame_video();
 
 	qcom_show_boot_source();
 	/* Configure the dfu_string for capsule updates */
