@@ -12,8 +12,6 @@
  * Based on Little Kernel driver, simplified
  */
 
-#define LOG_DEBUG
-
 #include <clk-uclass.h>
 #include <linux/clk-provider.h>
 #include <dm.h>
