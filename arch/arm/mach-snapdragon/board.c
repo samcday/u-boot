@@ -20,9 +20,12 @@
 #include <dm/read.h>
 #include <power/regulator.h>
 #include <env.h>
+#include <fdt_simplefb.h>
+#include <fdtdec.h>
 #include <fdt_support.h>
 #include <init.h>
 #include <linux/bug.h>
+#include <linux/libfdt.h>
 #include <linux/stringify.h>
 #include <linux/sizes.h>
 #include <lmb.h>
@@ -32,6 +35,7 @@
 #include <usb.h>
 #include <sort.h>
 #include <time.h>
+#include <video.h>
 
 #include "qcom-priv.h"
 
@@ -718,6 +722,34 @@ int board_late_init(void)
 	qcom_configure_capsule_updates();
 
 	return 0;
+}
+
+static int qcom_setup_simplefb(void *blob)
+{
+#if CONFIG_IS_ENABLED(FDT_SIMPLEFB)
+	int node, ret;
+
+	if (!video_is_active())
+		return 0;
+
+	node = fdt_node_offset_by_compatible(blob, -1, "simple-framebuffer");
+	if (node < 0) {
+		ret = fdt_simplefb_add_node(blob);
+		if (ret)
+			return ret;
+
+		return fdt_add_fb_mem_rsv(blob);
+	}
+
+	return fdt_simplefb_enable_and_mem_rsv(blob);
+#else
+	return 0;
+#endif
+}
+
+int ft_board_setup(void *blob, struct bd_info __maybe_unused *bd)
+{
+	return qcom_setup_simplefb(blob);
 }
 
 #ifdef CONFIG_ARM64

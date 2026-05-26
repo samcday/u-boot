@@ -443,6 +443,7 @@ static int qcom_mdp4_connect_panel(struct udevice *dev)
 static int qcom_mdp4_autostart(struct udevice *dev)
 {
 	struct qcom_mdp4_priv *priv = dev_get_priv(dev);
+	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 	int ret;
 
 	ret = qcom_mdp4_enable_resources(dev);
@@ -475,7 +476,7 @@ static int qcom_mdp4_autostart(struct udevice *dev)
 		return ret;
 	}
 
-	qcom_mdp4_program_teisko(priv, QCOM_MSM8960_TEISKO_FB_BASE);
+	qcom_mdp4_program_teisko(priv, uc_plat->base);
 
 	ret = nokia_teisko_panel_enable(priv->panel);
 	if (ret) {
@@ -490,9 +491,8 @@ static int qcom_mdp4_bind(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 
-	uc_plat->base = QCOM_MSM8960_TEISKO_FB_BASE;
-	uc_plat->size = QCOM_MSM8960_TEISKO_FB_SIZE;
-	uc_plat->align = SZ_4K;
+	uc_plat->size = ALIGN(QCOM_MSM8960_TEISKO_FB_SIZE, SZ_2M);
+	uc_plat->align = SZ_2M;
 
 	return 0;
 }
@@ -500,11 +500,14 @@ static int qcom_mdp4_bind(struct udevice *dev)
 static int qcom_mdp4_probe(struct udevice *dev)
 {
 	struct qcom_mdp4_priv *priv = dev_get_priv(dev);
+	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
 
 	priv->base = dev_read_addr_ptr(dev);
 	if (!priv->base)
 		return -EINVAL;
+	if (!uc_plat->base)
+		return -ENOMEM;
 
 	uc_priv->xsize = QCOM_MSM8960_TEISKO_HDISPLAY;
 	uc_priv->ysize = QCOM_MSM8960_TEISKO_VDISPLAY;
@@ -533,4 +536,5 @@ U_BOOT_DRIVER(qcom_mdp4) = {
 	.bind		= qcom_mdp4_bind,
 	.probe		= qcom_mdp4_probe,
 	.priv_auto	= sizeof(struct qcom_mdp4_priv),
+	.flags		= DM_FLAG_PRE_RELOC,
 };

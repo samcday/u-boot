@@ -124,14 +124,35 @@ static ulong alloc_fb(struct udevice *dev, ulong *addrp)
 	return size;
 }
 
+static ulong video_reserve_align(void)
+{
+	struct udevice *dev;
+	ulong align = 1;
+
+	for (uclass_find_first_device(UCLASS_VIDEO, &dev);
+	     dev;
+	     uclass_find_next_device(&dev)) {
+		struct video_uc_plat *plat = dev_get_uclass_plat(dev);
+		ulong dev_align = plat->align ? plat->align : 1 << 20;
+
+		if (plat->size && dev_align > align)
+			align = dev_align;
+	}
+
+	return align;
+}
+
 int video_reserve(ulong *addrp)
 {
 	struct udevice *dev;
+	ulong align;
 	ulong size;
 
 	if (IS_ENABLED(CONFIG_SPL_VIDEO_HANDOFF) && xpl_phase() == PHASE_BOARD_F)
 		return 0;
 
+	align = video_reserve_align();
+	*addrp &= ~(align - 1);
 	gd->video_top = *addrp;
 	for (uclass_find_first_device(UCLASS_VIDEO, &dev);
 	     dev;
