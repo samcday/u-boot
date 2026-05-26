@@ -12,6 +12,7 @@
 #include <clk.h>
 #include <cpu_func.h>
 #include <dm.h>
+#include <dm/device-internal.h>
 #include <dm/device_compat.h>
 #include <dm/read.h>
 #include <dm/uclass.h>
@@ -369,13 +370,24 @@ static int qcom_mdp4_connect_panel(struct udevice *dev)
 	struct mipi_dsi_device *dsi;
 	int ret;
 
-	ret = uclass_first_device_err(UCLASS_DSI_HOST, &priv->dsi);
-	if (ret)
+	ret = uclass_get_device(UCLASS_DSI_HOST, 0, &priv->dsi);
+	if (ret) {
+		dev_err(dev, "failed to get DSI host: %d\n", ret);
 		return ret;
+	}
 
-	ret = uclass_first_device_err(UCLASS_PANEL, &priv->panel);
-	if (ret)
+	ret = device_find_first_child_by_uclass(priv->dsi, UCLASS_PANEL,
+						&priv->panel);
+	if (ret) {
+		dev_err(dev, "failed to find DSI panel child: %d\n", ret);
 		return ret;
+	}
+
+	ret = device_probe(priv->panel);
+	if (ret) {
+		dev_err(dev, "failed to probe DSI panel child: %d\n", ret);
+		return ret;
+	}
 
 	mplat = dev_get_plat(priv->panel);
 	dsi = qcom_msm8960_dsi_device(priv->dsi);
