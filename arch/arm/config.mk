@@ -112,6 +112,14 @@ endif
 # needed for relocation
 LDFLAGS_u-boot += -pie
 
+ifeq ($(CONFIG_ARM64),y)
+# force linker to 4K page alignment, since u-boot only supports this
+# if we let linker decide, we can waste a lot of space in ELFs with
+# MMU_PGPROT enabled (Fedora's aarch64-linux-none toolchain selects 64K
+# granules for example)
+LDFLAGS_u-boot += -z common-page-size=0x1000 -z max-page-size=0x1000
+endif
+
 #
 # FIXME: binutils versions < 2.22 have a bug in the assembler where
 # branches to weak symbols can be incorrectly optimized in thumb mode
