@@ -1,5 +1,11 @@
 if ARCH_SNAPDRAGON
 
+config ARCH_SNAPDRAGON_ARM32
+	bool "Build Snapdragon support for ARMv7-A SoCs"
+	help
+	  Enable this when building U-Boot for older 32-bit Snapdragon
+	  platforms, such as the MSM8960 family.
+
 config SYS_SOC
 	default "snapdragon"
 

@@ -9,10 +9,17 @@
 #define LOG_CATEGORY LOGC_BOARD
 #define pr_fmt(fmt) "QCOM: " fmt
 
+#ifdef CONFIG_ARM64
 #include <asm/armv8/mmu.h>
+#endif
 #include <asm/gpio.h>
 #include <asm/io.h>
+#ifdef CONFIG_ARM64
 #include <asm/psci.h>
+#endif
+#ifdef CONFIG_ARCH_SNAPDRAGON_ARM32
+#include <asm/setup.h>
+#endif
 #include <asm/system.h>
 #include <dm/device.h>
 #include <dm/pinctrl.h>
@@ -20,11 +27,16 @@
 #include <dm/read.h>
 #include <power/regulator.h>
 #include <env.h>
+#include <fdtdec.h>
 #include <fdt_support.h>
 #include <init.h>
+#ifdef CONFIG_ARM64
 #include <linux/arm-smccc.h>
+#endif
 #include <linux/bug.h>
+#ifdef CONFIG_ARM64
 #include <linux/psci.h>
+#endif
 #include <linux/sizes.h>
 #include <lmb.h>
 #include <malloc.h>
@@ -39,14 +51,20 @@ DECLARE_GLOBAL_DATA_PTR;
 
 enum qcom_boot_source qcom_boot_source __section(".data") = 0;
 
+#ifdef CONFIG_ARM64
 static struct mm_region rbx_mem_map[CONFIG_NR_DRAM_BANKS + 2] = { { 0 } };
 
 struct mm_region *mem_map = rbx_mem_map;
+#endif
 
 static struct {
 	phys_addr_t start;
 	phys_size_t size;
 } prevbl_ddr_banks[CONFIG_NR_DRAM_BANKS] __section(".data") = { 0 };
+
+#ifdef CONFIG_ARCH_SNAPDRAGON_ARM32
+extern u32 qcom_prev_bl_args[4];
+#endif
 
 int dram_init(void)
 {
@@ -70,6 +88,30 @@ static int ddr_bank_cmp(const void *v1, const void *v2)
 		return -1;
 
 	return (res1->start >> 24) - (res2->start >> 24);
+}
+
+static void qcom_clear_memory_banks(void)
+{
+	int i;
+
+	for (i = 0; i < CONFIG_NR_DRAM_BANKS; i++) {
+		prevbl_ddr_banks[i].start = 0;
+		prevbl_ddr_banks[i].size = 0;
+	}
+}
+
+static int qcom_commit_memory_banks(int banks, phys_addr_t ram_end)
+{
+	if (!banks || !prevbl_ddr_banks[0].size)
+		return -ENODATA;
+
+	/* Sort our RAM banks -_- */
+	qsort(prevbl_ddr_banks, banks, sizeof(prevbl_ddr_banks[0]), ddr_bank_cmp);
+
+	gd->ram_base = prevbl_ddr_banks[0].start;
+	gd->ram_size = ram_end - gd->ram_base;
+
+	return 0;
 }
 
 /* This has to be done post-relocation since gd->bd isn't preserved */
@@ -115,51 +157,173 @@ int dram_init_banksize(void)
 static int qcom_parse_memory(const void *fdt)
 {
 	int offset;
-	const fdt64_t *memory;
+	const fdt32_t *memory, *end;
 	int memsize;
+	int parent, addr_cells, size_cells, entry_cells;
 	phys_addr_t ram_end = 0;
 	int i, j, banks;
 
+	qcom_clear_memory_banks();
+
 	offset = fdt_path_offset(fdt, "/memory");
 	if (offset < 0)
+		offset = fdt_node_offset_by_prop_value(fdt, -1, "device_type",
+						      "memory", sizeof("memory"));
+	if (offset < 0)
 		return -ENODATA;
+
+	parent = fdt_parent_offset(fdt, offset);
+	if (parent < 0)
+		return -ENODATA;
+
+	addr_cells = fdt_address_cells(fdt, parent);
+	size_cells = fdt_size_cells(fdt, parent);
+	if (addr_cells <= 0 || size_cells <= 0)
+		return -ENODATA;
+
+	entry_cells = addr_cells + size_cells;
 
 	memory = fdt_getprop(fdt, offset, "reg", &memsize);
 	if (!memory)
 		return -ENODATA;
 
-	banks = min(memsize / (2 * sizeof(u64)), (ulong)CONFIG_NR_DRAM_BANKS);
+	banks = min_t(int, memsize / (entry_cells * (int)sizeof(fdt32_t)),
+		      CONFIG_NR_DRAM_BANKS);
+	end = memory + memsize / sizeof(*memory);
 
-	if (memsize / sizeof(u64) > CONFIG_NR_DRAM_BANKS * 2)
+	if (memsize / sizeof(fdt32_t) > CONFIG_NR_DRAM_BANKS * entry_cells)
 		log_err("Provided more than the max of %d memory banks\n", CONFIG_NR_DRAM_BANKS);
 
 	if (banks > CONFIG_NR_DRAM_BANKS)
 		log_err("Provided more memory banks than we can handle\n");
 
-	for (i = 0, j = 0; i < banks * 2; i += 2, j++) {
-		prevbl_ddr_banks[j].start = get_unaligned_be64(&memory[i]);
-		prevbl_ddr_banks[j].size = get_unaligned_be64(&memory[i + 1]);
-		if (!prevbl_ddr_banks[j].size) {
-			j--;
+	for (i = 0, j = 0; i < banks && memory + entry_cells <= end; i++) {
+		phys_addr_t start = fdtdec_get_number(memory, addr_cells);
+		phys_size_t size = fdtdec_get_number(memory + addr_cells,
+						     size_cells);
+
+		memory += entry_cells;
+		if (!size)
 			continue;
-		}
-		ram_end = max(ram_end, prevbl_ddr_banks[j].start + prevbl_ddr_banks[j].size);
+
+		prevbl_ddr_banks[j].start = start;
+		prevbl_ddr_banks[j].size = size;
+		ram_end = max(ram_end, start + size);
+		j++;
 	}
 
-	if (!banks || !prevbl_ddr_banks[0].size)
-		return -ENODATA;
-
-	/* Sort our RAM banks -_- */
-	qsort(prevbl_ddr_banks, banks, sizeof(prevbl_ddr_banks[0]), ddr_bank_cmp);
-
-	gd->ram_base = prevbl_ddr_banks[0].start;
-	gd->ram_size = ram_end - gd->ram_base;
-
-	return 0;
+	return qcom_commit_memory_banks(j, ram_end);
 }
+
+#ifdef CONFIG_ARCH_SNAPDRAGON_ARM32
+#define QCOM_ATAGS_MAX_SIZE	SZ_64K
+
+static phys_addr_t qcom_prev_bl_arg2(void)
+{
+	return qcom_prev_bl_args[2];
+}
+
+static void qcom_show_prev_bl_args(void)
+{
+	debug("prev BL args r0=%#010x r1=%#010x r2=%#010x r3=%#010x\n",
+	      qcom_prev_bl_args[0], qcom_prev_bl_args[1],
+	      qcom_prev_bl_args[2], qcom_prev_bl_args[3]);
+}
+
+static bool qcom_atags_have_core(const struct tag *tags)
+{
+	return tags && tags->hdr.tag == ATAG_CORE &&
+	       tags->hdr.size >= sizeof(struct tag_header) / sizeof(u32);
+}
+
+static int qcom_parse_atags_memory(const struct tag *tags)
+{
+	const struct tag *tag = tags;
+	phys_addr_t ram_end = 0;
+	size_t parsed = 0;
+	bool end_seen = false;
+	int banks = 0;
+
+	if (!qcom_atags_have_core(tags))
+		return -EINVAL;
+
+	log_debug("parsing ATAGS at %#011lx\n", (ulong)tags);
+	qcom_clear_memory_banks();
+
+	while (parsed + sizeof(struct tag_header) <= QCOM_ATAGS_MAX_SIZE) {
+		u32 words = tag->hdr.size;
+		u32 bytes;
+
+		if (tag->hdr.tag == ATAG_NONE) {
+			end_seen = true;
+			break;
+		}
+
+		if (words < sizeof(struct tag_header) / sizeof(u32)) {
+			log_warning("malformed ATAG %#010x size %u at %#011lx\n",
+				    tag->hdr.tag, words, (ulong)tag);
+			return -EINVAL;
+		}
+
+		if (words > QCOM_ATAGS_MAX_SIZE / sizeof(u32)) {
+			log_warning("oversized ATAG %#010x size %u at %#011lx\n",
+				    tag->hdr.tag, words, (ulong)tag);
+			return -EINVAL;
+		}
+		bytes = words * sizeof(u32);
+
+		if (parsed + bytes > QCOM_ATAGS_MAX_SIZE) {
+			log_warning("ATAGS exceed max size at %#011lx\n", (ulong)tag);
+			return -EINVAL;
+		}
+
+		if (tag->hdr.tag == ATAG_MEM) {
+			if (words < tag_size(tag_mem32)) {
+				log_warning("short ATAG_MEM size %u at %#011lx\n",
+					    words, (ulong)tag);
+				return -EINVAL;
+			}
+
+			if (tag->u.mem.size && banks < CONFIG_NR_DRAM_BANKS) {
+				prevbl_ddr_banks[banks].start = tag->u.mem.start;
+				prevbl_ddr_banks[banks].size = tag->u.mem.size;
+				ram_end = max(ram_end, (phys_addr_t)tag->u.mem.start +
+					      tag->u.mem.size);
+				log_debug("ATAG_MEM[%d] %#011x..%#011x\n", banks,
+					  tag->u.mem.start,
+					  tag->u.mem.start + tag->u.mem.size);
+				banks++;
+			} else if (tag->u.mem.size) {
+				log_warning("ignoring ATAG_MEM beyond %d banks\n",
+					    CONFIG_NR_DRAM_BANKS);
+			}
+		}
+
+		parsed += bytes;
+		tag = (const struct tag *)((const u32 *)tag + words);
+	}
+
+	if (!end_seen) {
+		log_warning("ATAGS end marker not found\n");
+		return -EINVAL;
+	}
+
+	return qcom_commit_memory_banks(banks, ram_end);
+}
+#else
+static phys_addr_t qcom_prev_bl_arg2(void)
+{
+	return get_prev_bl_fdt_addr();
+}
+
+static void qcom_show_prev_bl_args(void)
+{
+}
+#endif
 
 static void show_psci_version(void)
 {
+#ifdef CONFIG_ARM64
 	struct arm_smccc_res res;
 
 	arm_smccc_smc(ARM_PSCI_0_2_FN_PSCI_VERSION, 0, 0, 0, 0, 0, 0, 0, &res);
@@ -171,6 +335,7 @@ static void show_psci_version(void)
 	debug("PSCI:  v%ld.%ld\n",
 	      PSCI_VERSION_MAJOR(res.a0),
 	      PSCI_VERSION_MINOR(res.a0));
+#endif
 }
 
 /**
@@ -182,6 +347,7 @@ static void show_psci_version(void)
  */
 static void qcom_psci_fixup(void *fdt)
 {
+#ifdef CONFIG_ARM64
 	int offset, ret;
 	struct arm_smccc_res res;
 
@@ -198,6 +364,7 @@ static void qcom_psci_fixup(void *fdt)
 	ret = fdt_del_node(fdt, offset);
 	if (ret)
 		log_err("Failed to delete /psci node: %d\n", ret);
+#endif
 }
 
 /* We support booting U-Boot with an internal DT when running as a first-stage bootloader
@@ -207,11 +374,13 @@ static void qcom_psci_fixup(void *fdt)
 int board_fdt_blob_setup(void **fdtp)
 {
 	struct fdt_header *external_fdt, *internal_fdt;
+	bool atags_memory_valid = false;
 	bool internal_valid, external_valid;
 	int ret = -ENODATA;
 
 	internal_fdt = (struct fdt_header *)*fdtp;
-	external_fdt = (struct fdt_header *)get_prev_bl_fdt_addr();
+	external_fdt = (struct fdt_header *)qcom_prev_bl_arg2();
+	qcom_show_prev_bl_args();
 	external_valid = external_fdt && !fdt_check_header(external_fdt);
 	internal_valid = !fdt_check_header(internal_fdt);
 
@@ -221,7 +390,7 @@ int board_fdt_blob_setup(void **fdtp)
 	 */
 	if (!internal_valid && !external_valid)
 		panic("Internal FDT is invalid and no external FDT was provided! (fdt=%#llx)\n",
-		      (phys_addr_t)external_fdt);
+		      (unsigned long long)(phys_addr_t)external_fdt);
 
 	/* Prefer memory information from internal DT if it's present */
 	if (internal_valid)
@@ -237,17 +406,25 @@ int board_fdt_blob_setup(void **fdtp)
 		ret = qcom_parse_memory(external_fdt);
 	}
 
+#ifdef CONFIG_ARCH_SNAPDRAGON_ARM32
+	if (ret < 0 && !external_valid && qcom_prev_bl_arg2()) {
+		debug("No memory info in FDTs, falling back to ATAGS\n");
+		ret = qcom_parse_atags_memory((const struct tag *)qcom_prev_bl_arg2());
+		atags_memory_valid = !ret;
+	}
+#endif
+
 	if (ret < 0)
 		panic("No valid memory ranges found!\n");
 
 	/* If we have an external FDT, it can only have come from the Android bootloader. */
-	if (external_valid)
+	if (external_valid || atags_memory_valid)
 		qcom_boot_source = QCOM_BOOT_SOURCE_ANDROID;
 	else
 		qcom_boot_source = QCOM_BOOT_SOURCE_XBL;
 
 	debug("ram_base = %#011lx, ram_size = %#011llx\n",
-	      gd->ram_base, gd->ram_size);
+	      gd->ram_base, (unsigned long long)gd->ram_size);
 
 	if (internal_valid) {
 		debug("Using built in FDT\n");
@@ -581,6 +758,7 @@ int board_late_init(void)
 	return 0;
 }
 
+#ifdef CONFIG_ARM64
 static void build_mem_map(void)
 {
 	int i, j;
@@ -754,3 +932,4 @@ void enable_caches(void)
 	}
 	dcache_enable();
 }
+#endif
