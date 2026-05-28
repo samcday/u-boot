@@ -345,6 +345,8 @@ static void uart_dm_init(struct msm_serial_data *priv)
 	int bitrate = calc_csr_bitrate(priv);
 	unsigned int ipr;
 
+	msm_serial_wait_tx_empty(priv);
+
 	if (bitrate < 0) {
 		log_warning("Couldn't calculate bit clock divider! Using default\n");
 		/* This happens to be the value used on MSM8916 for the hardcoded clockrate
