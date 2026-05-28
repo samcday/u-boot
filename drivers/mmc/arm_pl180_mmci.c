@@ -27,6 +27,7 @@
 
 #define MMC_CLOCK_MAX	48000000
 #define MMC_CLOCK_MIN	400000
+#define QCOM_MMC_CLOCK_MAX	96000000
 
 struct arm_pl180_mmc_plat {
 	struct mmc_config cfg;
@@ -73,13 +74,15 @@ static int wait_for_command_end(struct mmc *dev, struct mmc_cmd *cmd)
 }
 
 /* send command to the mmc card and wait for results */
-static int do_command(struct mmc *dev, struct mmc_cmd *cmd)
+static int do_command(struct mmc *dev, struct mmc_cmd *cmd, bool data_cmd)
 {
 	int result;
 	u32 sdi_cmd = 0;
 	struct pl180_mmc_host *host = dev->priv;
 
 	sdi_cmd = ((cmd->cmdidx & SDI_CMD_CMDINDEX_MASK) | SDI_CMD_CPSMEN);
+	if (host->qcom && data_cmd)
+		sdi_cmd |= SDI_CMD_QCOM_DATCMD;
 
 	if (cmd->resp_type) {
 		sdi_cmd |= SDI_CMD_WAITRESP;
@@ -230,14 +233,19 @@ static int do_data_transfer(struct mmc *dev,
 	u32 data_len = (u32) (data->blocks * data->blocksize);
 	assert(data_len < U16_MAX); /* should be ensured by arm_pl180_get_b_max */
 
-	if (!host->version2) {
+	if (host->qcom) {
+		blksz = data->blocksize;
+		data_ctrl |= blksz << 4;
+	} else if (!host->version2) {
 		blksz = (ffs(data->blocksize) - 1);
 		data_ctrl |= ((blksz << 4) & SDI_DCTRL_DBLKSIZE_MASK);
 	} else {
 		blksz = data->blocksize;
 		data_ctrl |= (blksz << SDI_DCTRL_DBLOCKSIZE_V2_SHIFT);
 	}
-	data_ctrl |= SDI_DCTRL_DTEN | SDI_DCTRL_BUSYMODE;
+	data_ctrl |= SDI_DCTRL_DTEN;
+	if (!host->qcom)
+		data_ctrl |= SDI_DCTRL_BUSYMODE;
 
 	writel(SDI_DTIMER_DEFAULT, &host->base->datatimer);
 	writel(data_len, &host->base->datalength);
@@ -247,14 +255,14 @@ static int do_data_transfer(struct mmc *dev,
 		data_ctrl |= SDI_DCTRL_DTDIR_IN;
 		writel(data_ctrl, &host->base->datactrl);
 
-		error = do_command(dev, cmd);
+		error = do_command(dev, cmd, true);
 		if (error)
 			return error;
 
 		error = read_bytes(dev, (u32 *)data->dest, (u32)data->blocks,
 				   (u32)data->blocksize);
 	} else if (data->flags & MMC_DATA_WRITE) {
-		error = do_command(dev, cmd);
+		error = do_command(dev, cmd, true);
 		if (error)
 			return error;
 
@@ -275,7 +283,7 @@ static int host_request(struct mmc *dev,
 	if (data)
 		result = do_data_transfer(dev, cmd, data);
 	else
-		result = do_command(dev, cmd);
+		result = do_command(dev, cmd, false);
 
 	return result;
 }
@@ -292,6 +300,48 @@ static int  host_set_ios(struct mmc *dev)
 {
 	struct pl180_mmc_host *host = dev->priv;
 	u32 sdi_clkcr;
+	u32 buswidth;
+
+	if (host->qcom) {
+		if (dev->clk_disable) {
+			writel(0, &host->base->clock);
+			return 0;
+		}
+
+		if (dev->clock && host->has_clk) {
+			long rate = clk_set_rate(&host->clk, dev->clock);
+
+			if (rate > 0) {
+				dev->clock = rate;
+				host->clock_in = rate;
+			}
+		}
+
+		sdi_clkcr = SDI_CLKCR_CLKEN | SDI_CLKCR_QCOM_FLOWENA |
+			    SDI_CLKCR_QCOM_FBCLK;
+
+		switch (dev->bus_width) {
+		case 0:
+		case 1:
+			buswidth = 0;
+			break;
+		case 4:
+			buswidth = SDI_CLKCR_WIDBUS_4;
+			break;
+		case 8:
+			buswidth = SDI_CLKCR_QCOM_WIDBUS_8;
+			break;
+		default:
+			printf("Invalid bus width: %d\n", dev->bus_width);
+			buswidth = 0;
+			break;
+		}
+
+		writel(sdi_clkcr | buswidth, &host->base->clock);
+		udelay(CLK_CHANGE_DELAY);
+
+		return 0;
+	}
 
 	sdi_clkcr = readl(&host->base->clock);
 
@@ -384,24 +434,46 @@ static int arm_pl180_mmc_probe(struct udevice *dev)
 	struct mmc *mmc = &pdata->mmc;
 	struct pl180_mmc_host *host = dev_get_priv(dev);
 	struct mmc_config *cfg = &pdata->cfg;
-	struct clk clk;
+	u32 clk_rate;
 	u32 periphid;
 	int ret;
 
-	ret = clk_get_by_index(dev, 0, &clk);
+	ret = clk_get_by_name(dev, "mclk", &host->clk);
 	if (ret < 0)
-		return ret;
+		ret = clk_get_by_index(dev, 0, &host->clk);
+	if (ret < 0) {
+		ret = dev_read_u32(dev, "clock-frequency", &clk_rate);
+		if (ret)
+			ret = dev_read_u32(dev, "max-frequency", &clk_rate);
+		if (ret)
+			return ret;
 
-	ret = clk_enable(&clk);
-	if (ret) {
-		dev_err(dev, "failed to enable clock\n");
-		return ret;
+		dev_warn(dev, "using DT clock frequency without clock provider\n");
+		host->clock_in = clk_rate;
+	} else {
+		host->has_clk = true;
+		ret = clk_enable(&host->clk);
+		if (ret) {
+			dev_err(dev, "failed to enable clock\n");
+			return ret;
+		}
+
+		host->clock_in = clk_get_rate(&host->clk);
+	}
+
+	ret = clk_get_by_name(dev, "apb_pclk", &host->pclk);
+	if (!ret) {
+		host->has_pclk = true;
+		ret = clk_enable(&host->pclk);
+		if (ret) {
+			dev_err(dev, "failed to enable APB clock\n");
+			return ret;
+		}
 	}
 
 	host->pwr_init = INIT_PWR;
 	host->clkdiv_init = SDI_CLKCR_CLKDIV_INIT_V1 | SDI_CLKCR_CLKEN |
 			    SDI_CLKCR_HWFC_EN;
-	host->clock_in = clk_get_rate(&clk);
 
 	cfg->name = dev->name;
 	cfg->voltages = VOLTAGE_WINDOW_SD;
@@ -412,6 +484,14 @@ static int arm_pl180_mmc_probe(struct udevice *dev)
 
 	periphid = dev_read_u32_default(dev, "arm,primecell-periphid", 0);
 	switch (periphid) {
+	case 0x00051180: /* Qualcomm variant */
+		host->pwr_init = SDI_PWR_PWRCTRL_ON;
+		host->clkdiv_init = SDI_CLKCR_CLKEN | SDI_CLKCR_QCOM_FLOWENA |
+				    SDI_CLKCR_QCOM_FBCLK;
+		host->qcom = true;
+		host->version2 = false;
+		cfg->voltages = VOLTAGE_WINDOW_MMC;
+		break;
 	case STM32_MMCI_ID: /* stm32 variant */
 		host->version2 = false;
 		break;
@@ -432,6 +512,10 @@ static int arm_pl180_mmc_probe(struct udevice *dev)
 	ret = mmc_of_parse(dev, cfg);
 	if (ret)
 		return ret;
+	if (host->qcom) {
+		cfg->f_min = MMC_CLOCK_MIN;
+		cfg->f_max = min_t(uint, cfg->f_max, QCOM_MMC_CLOCK_MAX);
+	}
 
 	arm_pl180_mmc_init(host);
 	mmc->priv = host;

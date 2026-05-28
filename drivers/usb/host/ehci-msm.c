@@ -15,6 +15,7 @@
 #include <usb.h>
 #include <usb/ehci-ci.h>
 #include <usb/ulpi.h>
+#include <reset.h>
 #include <wait_bit.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
@@ -29,6 +30,7 @@ struct msm_ehci_priv {
 
 struct qcom_ci_hdrc_priv {
 	struct clk_bulk clks;
+	struct reset_ctl_bulk resets;
 };
 
 static int msm_init_after_reset(struct ehci_ctrl *dev)
@@ -53,6 +55,7 @@ static int ehci_usb_probe(struct udevice *dev)
 	struct msm_ehci_priv *p = dev_get_priv(dev);
 	struct usb_ehci *ehci = p->ehci;
 	struct usb_plat *plat = dev_get_plat(dev);
+	enum phy_mode phy_mode = PHY_MODE_USB_HOST;
 	struct ehci_hccr *hccr;
 	struct ehci_hcor *hcor;
 	int ret;
@@ -61,7 +64,10 @@ static int ehci_usb_probe(struct udevice *dev)
 	hcor = (struct ehci_hcor *)((phys_addr_t)hccr +
 			HC_LENGTH(ehci_readl(&(hccr)->cr_capbase)));
 
-	ret = generic_setup_phy(dev, &p->phy, 0, PHY_MODE_USB_HOST, 0);
+	if (plat->init_type == USB_INIT_DEVICE)
+		phy_mode = PHY_MODE_USB_DEVICE;
+
+	ret = generic_setup_phy(dev, &p->phy, 0, phy_mode, 0);
 	if (ret)
 		return ret;
 
@@ -135,18 +141,43 @@ static int qcom_ci_hdrc_probe(struct udevice *dev)
 	int ret;
 
 	ret = clk_get_bulk(dev, &p->clks);
-	if (ret && (ret != -ENOSYS && ret != -ENOENT)) {
+	if (ret && ret != -ENOSYS && ret != -ENOENT && ret != -ENODEV) {
 		dev_err(dev, "Failed to get clocks: %d\n", ret);
 		return ret;
 	}
 
-	return clk_enable_bulk(&p->clks);
+	ret = clk_enable_bulk(&p->clks);
+	if (ret) {
+		dev_err(dev, "Failed to enable clocks: %d\n", ret);
+		return ret;
+	}
+
+	ret = reset_get_bulk(dev, &p->resets);
+	if (ret && ret != -ENOSYS && ret != -ENOENT && ret != -ENODEV) {
+		dev_err(dev, "Failed to get resets: %d\n", ret);
+		goto err_clks;
+	}
+
+	ret = reset_deassert_bulk(&p->resets);
+	if (ret) {
+		dev_err(dev, "Failed to deassert resets: %d\n", ret);
+		goto err_resets;
+	}
+
+	return 0;
+
+err_resets:
+	reset_release_bulk(&p->resets);
+err_clks:
+	clk_release_bulk(&p->clks);
+	return ret;
 }
 
 static int qcom_ci_hdrc_remove(struct udevice *dev)
 {
 	struct qcom_ci_hdrc_priv *p = dev_get_priv(dev);
 
+	reset_release_bulk(&p->resets);
 	return clk_release_bulk(&p->clks);
 }
 

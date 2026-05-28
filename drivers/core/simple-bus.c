@@ -68,6 +68,7 @@ UCLASS_DRIVER(simple_bus) = {
 static const struct udevice_id generic_simple_bus_ids[] = {
 	{ .compatible = "simple-bus" },
 	{ .compatible = "simple-mfd" },
+	{ .compatible = "qcom,gsbi-v1.0.0" },
 	{ }
 };
 #endif
