@@ -351,6 +351,8 @@ static inline void _debug_uart_init(void)
 	 *   - HMIBSC: GCC_BLSP1_UART1_APPS_CLK
 	 */
 	//apq8016_clk_init_uart(0x1800000, <uart_clk_id>);
+	while (!(readl(init_serial_data.base + UARTDM_SR) & UARTDM_SR_TX_EMPTY))
+		;
 	uart_dm_init(&init_serial_data);
 }
 
