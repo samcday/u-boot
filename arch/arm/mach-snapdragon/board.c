@@ -9,10 +9,15 @@
 #define LOG_CATEGORY LOGC_BOARD
 #define pr_fmt(fmt) "QCOM: " fmt
 
+#ifdef CONFIG_ARM64
 #include <asm/armv8/mmu.h>
+#include <asm/psci.h>
+#include <linux/arm-smccc.h>
+#include <linux/psci.h>
+#endif
+
 #include <asm/gpio.h>
 #include <asm/io.h>
-#include <asm/psci.h>
 #include <asm/system.h>
 #include <dm/device.h>
 #include <dm/pinctrl.h>
@@ -22,9 +27,7 @@
 #include <env.h>
 #include <fdt_support.h>
 #include <init.h>
-#include <linux/arm-smccc.h>
 #include <linux/bug.h>
-#include <linux/psci.h>
 #include <linux/sizes.h>
 #include <lmb.h>
 #include <malloc.h>
@@ -39,9 +42,11 @@ DECLARE_GLOBAL_DATA_PTR;
 
 enum qcom_boot_source qcom_boot_source __section(".data") = 0;
 
+#ifdef CONFIG_ARM64
 static struct mm_region rbx_mem_map[CONFIG_NR_DRAM_BANKS + 2] = { { 0 } };
 
 struct mm_region *mem_map = rbx_mem_map;
+#endif
 
 static struct {
 	phys_addr_t start;
@@ -178,6 +183,7 @@ static int qcom_parse_memory(const void *fdt)
 
 static void show_psci_version(void)
 {
+#ifdef CONFIG_ARM64
 	struct arm_smccc_res res;
 
 	arm_smccc_smc(ARM_PSCI_0_2_FN_PSCI_VERSION, 0, 0, 0, 0, 0, 0, 0, &res);
@@ -189,6 +195,7 @@ static void show_psci_version(void)
 	debug("PSCI:  v%ld.%ld\n",
 	      PSCI_VERSION_MAJOR(res.a0),
 	      PSCI_VERSION_MINOR(res.a0));
+#endif
 }
 
 /**
@@ -200,6 +207,7 @@ static void show_psci_version(void)
  */
 static void qcom_psci_fixup(void *fdt)
 {
+#ifdef CONFIG_ARM64
 	int offset, ret;
 	struct arm_smccc_res res;
 
@@ -216,6 +224,7 @@ static void qcom_psci_fixup(void *fdt)
 	ret = fdt_del_node(fdt, offset);
 	if (ret)
 		log_err("Failed to delete /psci node: %d\n", ret);
+#endif
 }
 
 /* We support booting U-Boot with an internal DT when running as a first-stage bootloader
@@ -238,8 +247,8 @@ int board_fdt_blob_setup(void **fdtp)
 	 * Bail out while we can still print a useful error message.
 	 */
 	if (!internal_valid && !external_valid)
-		panic("Internal FDT is invalid and no external FDT was provided! (fdt=%#llx)\n",
-		      (phys_addr_t)external_fdt);
+		panic("Internal FDT is invalid and no external FDT was provided! (fdt=%p)\n",
+		      external_fdt);
 
 	/* Prefer memory information from internal DT if it's present */
 	if (internal_valid)
@@ -265,7 +274,7 @@ int board_fdt_blob_setup(void **fdtp)
 		qcom_boot_source = QCOM_BOOT_SOURCE_XBL;
 
 	debug("ram_base = %#011lx, ram_size = %#011llx\n",
-	      gd->ram_base, gd->ram_size);
+	      gd->ram_base, (unsigned long long)gd->ram_size);
 
 	if (internal_valid) {
 		debug("Using built in FDT\n");
@@ -599,6 +608,7 @@ int board_late_init(void)
 	return 0;
 }
 
+#ifdef CONFIG_ARM64
 static void build_mem_map(void)
 {
 	int i, j;
@@ -772,3 +782,4 @@ void enable_caches(void)
 	}
 	dcache_enable();
 }
+#endif
