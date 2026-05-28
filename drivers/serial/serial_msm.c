@@ -17,6 +17,7 @@
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <linux/compiler.h>
+#include <linux/delay.h>
 #include <dm/pinctrl.h>
 
 /* Serial registers - this driver works in uartdm mode*/
@@ -338,12 +339,16 @@ static struct msm_serial_data init_serial_data = {
 };
 
 #include <debug_uart.h>
+#define TX_EMPTY_TIMEOUT_US 10000
 
 /* Uncomment to turn on UART clocks when debugging U-Boot as aboot on MSM8916 */
 //int apq8016_clk_init_uart(phys_addr_t gcc_base, unsigned long id);
 
 static inline void _debug_uart_init(void)
 {
+	unsigned int timeout = TX_EMPTY_TIMEOUT_US;
+	phys_addr_t sr_reg = init_serial_data.base + UARTDM_SR;
+
 	/*
 	 * Uncomment to turn on UART clocks when debugging U-Boot as aboot
 	 * on MSM8916. Supported debug UART clock IDs:
@@ -351,6 +356,17 @@ static inline void _debug_uart_init(void)
 	 *   - HMIBSC: GCC_BLSP1_UART1_APPS_CLK
 	 */
 	//apq8016_clk_init_uart(0x1800000, <uart_clk_id>);
+
+	/* UARTDM might still be banging out TX contents from previous
+	 * bootloader. if we run uart_dm_init in this case, we'll garble the
+	 * serial output. wait for TX empty for a max of 10ms.
+	 */
+	while (timeout > 0) {
+		if (readl(sr_reg) & UARTDM_SR_TX_EMPTY)
+			break;
+		udelay(1);
+		timeout--;
+	}
 	uart_dm_init(&init_serial_data);
 }
 
