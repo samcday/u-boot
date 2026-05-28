@@ -115,8 +115,9 @@ int dram_init_banksize(void)
 static int qcom_parse_memory(const void *fdt)
 {
 	int offset;
-	const fdt64_t *memory;
+	const fdt32_t *memory;
 	int memsize;
+	int parent, addr_cells, size_cells, entry_cells;
 	phys_addr_t ram_end = 0;
 	int i, j, banks;
 
@@ -124,33 +125,50 @@ static int qcom_parse_memory(const void *fdt)
 	if (offset < 0)
 		return -ENODATA;
 
+	parent = fdt_parent_offset(fdt, offset);
+	if (parent < 0)
+		return -ENODATA;
+
+	addr_cells = fdt_address_cells(fdt, parent);
+	size_cells = fdt_size_cells(fdt, parent);
+	if (addr_cells <= 0 || size_cells <= 0)
+		return -ENODATA;
+
+	entry_cells = addr_cells + size_cells;
+
 	memory = fdt_getprop(fdt, offset, "reg", &memsize);
 	if (!memory)
 		return -ENODATA;
 
-	banks = min(memsize / (2 * sizeof(u64)), (ulong)CONFIG_NR_DRAM_BANKS);
+	banks = min(memsize / (entry_cells * (int)sizeof(*memory)),
+		    (int)CONFIG_NR_DRAM_BANKS);
 
-	if (memsize / sizeof(u64) > CONFIG_NR_DRAM_BANKS * 2)
+	if (memsize / sizeof(fdt32_t) > CONFIG_NR_DRAM_BANKS * entry_cells)
 		log_err("Provided more than the max of %d memory banks\n", CONFIG_NR_DRAM_BANKS);
 
 	if (banks > CONFIG_NR_DRAM_BANKS)
 		log_err("Provided more memory banks than we can handle\n");
 
-	for (i = 0, j = 0; i < banks * 2; i += 2, j++) {
-		prevbl_ddr_banks[j].start = get_unaligned_be64(&memory[i]);
-		prevbl_ddr_banks[j].size = get_unaligned_be64(&memory[i + 1]);
-		if (!prevbl_ddr_banks[j].size) {
-			j--;
+	for (i = 0, j = 0; i < banks; i++) {
+		phys_addr_t start = fdt_read_number(memory, addr_cells);
+		phys_size_t size = fdt_read_number(memory + addr_cells,
+						   size_cells);
+
+		memory += entry_cells;
+		if (!size)
 			continue;
-		}
-		ram_end = max(ram_end, prevbl_ddr_banks[j].start + prevbl_ddr_banks[j].size);
+
+		prevbl_ddr_banks[j].start = start;
+		prevbl_ddr_banks[j].size = size;
+		ram_end = max(ram_end, start + size);
+		j++;
 	}
 
-	if (!banks || !prevbl_ddr_banks[0].size)
+	if (!j)
 		return -ENODATA;
 
 	/* Sort our RAM banks -_- */
-	qsort(prevbl_ddr_banks, banks, sizeof(prevbl_ddr_banks[0]), ddr_bank_cmp);
+	qsort(prevbl_ddr_banks, j, sizeof(prevbl_ddr_banks[0]), ddr_bank_cmp);
 
 	gd->ram_base = prevbl_ddr_banks[0].start;
 	gd->ram_size = ram_end - gd->ram_base;
