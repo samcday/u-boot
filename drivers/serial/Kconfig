@@ -520,6 +520,22 @@ config DEBUG_UART_GOLDFISH
 
 endchoice
 
+config DEBUG_UART_MSM_GSBI_BASE
+	hex "Qualcomm GSBI base for debug UART"
+	depends on DEBUG_UART_MSM
+	default 0x0
+	help
+	  Base address of the GSBI control block for older UARTDM instances.
+	  Leave this as 0 when the UART is not behind a GSBI block.
+
+config DEBUG_UART_MSM_GSBI_MODE
+	int "Qualcomm GSBI mode for debug UART"
+	depends on DEBUG_UART_MSM
+	default 0
+	help
+	  GSBI protocol mode to write before using the debug UART. Older
+	  MSM8960-family UARTs use mode 6 for I2C plus UART.
+
 config DEBUG_UART_BASE
 	hex "Base address of UART"
 	depends on DEBUG_UART
