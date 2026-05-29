@@ -95,6 +95,26 @@ int dram_init_banksize(void)
 	return 0;
 }
 
+static bool qcom_fdt_node_is_enabled(const void *fdt, int node)
+{
+	const char *status = fdt_getprop(fdt, node, "status", NULL);
+
+	return !status || !strcmp(status, "okay");
+}
+
+static int qcom_fdt_next_memory_node(const void *fdt, int offset)
+{
+	const char *prop = "device_type";
+	const char *value = "memory";
+	int len = strlen(value) + 1;
+
+	do {
+		offset = fdt_node_offset_by_prop_value(fdt, offset, prop, value, len);
+	} while (offset >= 0 && !qcom_fdt_node_is_enabled(fdt, offset));
+
+	return offset;
+}
+
 /**
  * The generic memory parsing code in U-Boot lacks a few things that we
  * need on Qualcomm:
@@ -113,60 +133,72 @@ int dram_init_banksize(void)
  * We can't use fdtdec_setup_memory_banksize() since it stores the result in
  * gd->bd, which is not yet allocated.
  *
- * @fdt: FDT blob to parse /memory node from
+ * @fdt: FDT blob to parse memory nodes from
  *
- * Return: 0 on success or -ENODATA if /memory node is missing or incomplete
+ * Return: 0 on success or -ENODATA if memory nodes are missing or incomplete
  */
 static int qcom_parse_memory(const void *fdt)
 {
-	int offset;
+	int offset, memory_node;
 	const fdt32_t *memory;
 	int memsize;
 	int parent, addr_cells, size_cells, entry_cells;
 	phys_addr_t ram_end = 0;
-	int i, j, banks;
+	int i, j = 0, banks;
 
-	offset = fdt_path_offset(fdt, "/memory");
-	if (offset < 0)
-		return -ENODATA;
+	memset(prevbl_ddr_banks, 0, sizeof(prevbl_ddr_banks));
 
-	parent = fdt_parent_offset(fdt, offset);
-	if (parent < 0)
-		return -ENODATA;
+	for (memory_node = -1;; memory_node = offset) {
+		offset = qcom_fdt_next_memory_node(fdt, memory_node);
 
-	addr_cells = fdt_address_cells(fdt, parent);
-	size_cells = fdt_size_cells(fdt, parent);
-	if (addr_cells <= 0 || size_cells <= 0)
-		return -ENODATA;
-
-	entry_cells = addr_cells + size_cells;
-
-	memory = fdt_getprop(fdt, offset, "reg", &memsize);
-	if (!memory)
-		return -ENODATA;
-
-	banks = min(memsize / (entry_cells * (int)sizeof(*memory)),
-		    (int)CONFIG_NR_DRAM_BANKS);
-
-	if (memsize / sizeof(fdt32_t) > CONFIG_NR_DRAM_BANKS * entry_cells)
-		log_err("Provided more than the max of %d memory banks\n", CONFIG_NR_DRAM_BANKS);
-
-	if (banks > CONFIG_NR_DRAM_BANKS)
-		log_err("Provided more memory banks than we can handle\n");
-
-	for (i = 0, j = 0; i < banks; i++) {
-		phys_addr_t start = fdt_read_number(memory, addr_cells);
-		phys_size_t size = fdt_read_number(memory + addr_cells,
-						   size_cells);
-
-		memory += entry_cells;
-		if (!size)
+		/* Fall back to the legacy /memory node if device_type is missing. */
+		if (offset < 0 && memory_node < 0)
+			offset = fdt_path_offset(fdt, "/memory");
+		if (offset < 0)
+			break;
+		if (!qcom_fdt_node_is_enabled(fdt, offset))
 			continue;
 
-		prevbl_ddr_banks[j].start = start;
-		prevbl_ddr_banks[j].size = size;
-		ram_end = max(ram_end, start + size);
-		j++;
+		parent = fdt_parent_offset(fdt, offset);
+		if (parent < 0)
+			continue;
+
+		addr_cells = fdt_address_cells(fdt, parent);
+		size_cells = fdt_size_cells(fdt, parent);
+		if (addr_cells <= 0 || size_cells <= 0)
+			continue;
+
+		entry_cells = addr_cells + size_cells;
+
+		memory = fdt_getprop(fdt, offset, "reg", &memsize);
+		if (!memory)
+			continue;
+
+		banks = min(memsize / (entry_cells * (int)sizeof(*memory)),
+			    (int)CONFIG_NR_DRAM_BANKS - j);
+
+		if (memsize / sizeof(fdt32_t) >
+		    (CONFIG_NR_DRAM_BANKS - j) * entry_cells)
+			log_err("Provided more than the max of %d memory banks\n",
+				CONFIG_NR_DRAM_BANKS);
+
+		for (i = 0; i < banks; i++) {
+			phys_addr_t start = fdt_read_number(memory, addr_cells);
+			phys_size_t size = fdt_read_number(memory + addr_cells,
+							       size_cells);
+
+			memory += entry_cells;
+			if (!size)
+				continue;
+
+			prevbl_ddr_banks[j].start = start;
+			prevbl_ddr_banks[j].size = size;
+			ram_end = max(ram_end, start + size);
+			j++;
+		}
+
+		if (j == CONFIG_NR_DRAM_BANKS)
+			break;
 	}
 
 	if (!j)
