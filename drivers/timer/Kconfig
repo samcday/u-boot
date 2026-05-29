@@ -223,6 +223,13 @@ config ORION_TIMER
 	  Select this to enable an timer for Orion and Armada devices
 	  like Armada XP etc.
 
+config QCOM_KPSS_TIMER
+	bool "Qualcomm KPSS/SCSS timer support"
+	depends on TIMER && ARM
+	help
+	  Select this to enable the Qualcomm KPSS/SCSS digital general
+	  purpose timer used on older 32-bit Snapdragon SoCs.
+
 config RISCV_TIMER
 	bool "RISC-V timer support"
 	depends on TIMER && RISCV
