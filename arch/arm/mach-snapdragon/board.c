@@ -18,6 +18,7 @@
 
 #include <asm/gpio.h>
 #include <asm/io.h>
+#include <asm/setup.h>
 #include <asm/system.h>
 #include <dm/device.h>
 #include <dm/pinctrl.h>
@@ -213,6 +214,68 @@ static int qcom_parse_memory(const void *fdt)
 	return 0;
 }
 
+#define QCOM_ATAGS_MAX_SIZE	SZ_16K
+
+static bool qcom_atags_valid(const struct tag *tags)
+{
+	return tags && tags->hdr.tag == ATAG_CORE &&
+	       tags->hdr.size >= sizeof(struct tag_header) / sizeof(u32);
+}
+
+static int qcom_parse_atags(const struct tag *tags)
+{
+	phys_addr_t ram_end = 0;
+	const struct tag *t;
+	bool atags_end = false;
+	u32 words = 0;
+	int j = 0;
+
+	if (!qcom_atags_valid(tags))
+		return -ENODATA;
+
+	memset(prevbl_ddr_banks, 0, sizeof(prevbl_ddr_banks));
+
+	for (t = tags; words < QCOM_ATAGS_MAX_SIZE / sizeof(u32); t = tag_next(t)) {
+		if (t->hdr.tag == ATAG_NONE) {
+			atags_end = true;
+			break;
+		}
+		if (t->hdr.size < sizeof(struct tag_header) / sizeof(u32))
+			return -EINVAL;
+		if (t->hdr.size > QCOM_ATAGS_MAX_SIZE / sizeof(u32) - words)
+			return -EINVAL;
+
+		words += t->hdr.size;
+
+		if (t->hdr.tag != ATAG_MEM)
+			continue;
+		if (t->hdr.size < tag_size(tag_mem32))
+			return -EINVAL;
+		if (!t->u.mem.size)
+			continue;
+
+		prevbl_ddr_banks[j].start = t->u.mem.start;
+		prevbl_ddr_banks[j].size = t->u.mem.size;
+		ram_end = max(ram_end, (phys_addr_t)t->u.mem.start + t->u.mem.size);
+		j++;
+
+		if (j == CONFIG_NR_DRAM_BANKS)
+			break;
+	}
+
+	if (!atags_end && j < CONFIG_NR_DRAM_BANKS)
+		return -EINVAL;
+	if (!j)
+		return -ENODATA;
+
+	qsort(prevbl_ddr_banks, j, sizeof(prevbl_ddr_banks[0]), ddr_bank_cmp);
+
+	gd->ram_base = prevbl_ddr_banks[0].start;
+	gd->ram_size = ram_end - gd->ram_base;
+
+	return 0;
+}
+
 static void show_psci_version(void)
 {
 #ifdef CONFIG_ARM64
@@ -266,13 +329,15 @@ static void qcom_psci_fixup(void *fdt)
 int board_fdt_blob_setup(void **fdtp)
 {
 	struct fdt_header *external_fdt, *internal_fdt;
-	bool internal_valid, external_valid;
+	bool internal_valid, external_valid, external_atags = false;
 	int ret = -ENODATA;
 
 	internal_fdt = (struct fdt_header *)*fdtp;
 	external_fdt = (struct fdt_header *)get_prev_bl_fdt_addr();
 	external_valid = external_fdt && !fdt_check_header(external_fdt);
 	internal_valid = !fdt_check_header(internal_fdt);
+	if (!IS_ENABLED(CONFIG_ARM64))
+		external_atags = qcom_atags_valid((const struct tag *)external_fdt);
 
 	/*
 	 * There is no point returning an error here, U-Boot can't do anything useful in this situation.
@@ -296,11 +361,18 @@ int board_fdt_blob_setup(void **fdtp)
 		ret = qcom_parse_memory(external_fdt);
 	}
 
+	if (!IS_ENABLED(CONFIG_ARM64) && ret < 0 && external_atags) {
+		if (internal_valid)
+			debug("No memory info in FDTs, falling back to ATAGS\n");
+
+		ret = qcom_parse_atags((const struct tag *)external_fdt);
+	}
+
 	if (ret < 0)
 		panic("No valid memory ranges found!\n");
 
-	/* If we have an external FDT, it can only have come from the Android bootloader. */
-	if (external_valid)
+	/* If we have an external FDT or ATAGS, it came from the Android bootloader. */
+	if (external_valid || external_atags)
 		qcom_boot_source = QCOM_BOOT_SOURCE_ANDROID;
 	else
 		qcom_boot_source = QCOM_BOOT_SOURCE_XBL;
