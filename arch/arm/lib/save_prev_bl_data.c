@@ -12,41 +12,66 @@
 #include <fdt.h>
 #include <linux/errno.h>
 #include <asm/system.h>
-#include <asm/armv8/mmu.h>
 
-static ulong reg0 __section(".data");
+#ifdef CONFIG_ARM64
+#include <asm/armv8/mmu.h>
+#else
+#include <asm/global_data.h>
+
+DECLARE_GLOBAL_DATA_PTR;
+#endif
+
+static ulong prev_bl_fdt_addr __section(".data");
 
 /**
- * Save x0 register value, assuming previous bootloader set it to
- * point on loaded fdt or (for older linux kernels)atags.
+ * Save the register value used by Linux boot ABI to pass the FDT or ATAGS.
  */
-void save_boot_params(ulong r0)
+void save_boot_params(ulong r0, ulong __always_unused r1, ulong r2)
 {
-	reg0 = r0;
+	if (IS_ENABLED(CONFIG_ARM64))
+		prev_bl_fdt_addr = r0;
+	else
+		prev_bl_fdt_addr = r2;
+
 	save_boot_params_ret();
 }
 
 bool is_addr_accessible(phys_addr_t addr)
 {
-	struct mm_region *mem = mem_map;
 	phys_addr_t bank_start;
 	phys_addr_t bank_end;
+
+#ifdef CONFIG_ARM64
+	struct mm_region *mem = mem_map;
 
 	while (mem->size) {
 		bank_start = mem->phys;
 		bank_end = bank_start + mem->size;
-		debug("check if block %pap - %pap includes %pap\n", &bank_start, &bank_end, &addr);
-		if (addr > bank_start && addr < bank_end)
+		debug("check if block %pap - %pap includes %pap\n",
+		      &bank_start, &bank_end, &addr);
+		if (addr >= bank_start && addr < bank_end)
 			return true;
 		mem++;
 	}
+#else
+	for (int i = 0; i < CONFIG_NR_DRAM_BANKS; i++) {
+		if (!gd->bd->bi_dram[i].size)
+			continue;
 
+		bank_start = gd->bd->bi_dram[i].start;
+		bank_end = bank_start + gd->bd->bi_dram[i].size;
+		debug("check if block %pap - %pap includes %pap\n",
+		      &bank_start, &bank_end, &addr);
+		if (addr >= bank_start && addr < bank_end)
+			return true;
+	}
+#endif
 	return false;
 }
 
 phys_addr_t get_prev_bl_fdt_addr(void)
 {
-	return reg0;
+	return prev_bl_fdt_addr;
 }
 
 int save_prev_bl_data(void)
@@ -55,24 +80,25 @@ int save_prev_bl_data(void)
 	int node;
 	u64 initrd_start_prop;
 
-	if (!is_addr_accessible((phys_addr_t)reg0))
+	if (!is_addr_accessible((phys_addr_t)prev_bl_fdt_addr))
 		return -ENODATA;
 
-	fdt_blob = (struct fdt_header *)reg0;
+	fdt_blob = (struct fdt_header *)prev_bl_fdt_addr;
 	if (!fdt_valid(&fdt_blob)) {
-		pr_warn("%s: address 0x%lx is not a valid fdt\n", __func__, reg0);
+		pr_warn("%s: address 0x%lx is not a valid fdt\n",
+			__func__, prev_bl_fdt_addr);
 		return -ENODATA;
 	}
 
 	if (IS_ENABLED(CONFIG_SAVE_PREV_BL_FDT_ADDR))
-		env_set_addr("prevbl_fdt_addr", (void *)reg0);
+		env_set_addr("prevbl_fdt_addr", (void *)prev_bl_fdt_addr);
 	if (!IS_ENABLED(CONFIG_SAVE_PREV_BL_INITRAMFS_START_ADDR))
 		return 0;
 
 	node = fdt_path_offset(fdt_blob, "/chosen");
 	if (!node) {
 		pr_warn("%s: chosen node not found in device tree at addr: 0x%lx\n",
-					__func__, reg0);
+					__func__, prev_bl_fdt_addr);
 		return -ENODATA;
 	}
 	/*
