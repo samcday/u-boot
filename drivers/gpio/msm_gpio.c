@@ -29,7 +29,7 @@ struct msm_gpio_bank {
 };
 
 #define GPIO_CONFIG_REG(dev, x) \
-	(qcom_pin_offset(((struct msm_gpio_bank *)dev_get_priv(dev))->pin_data->pin_offsets, x))
+	(qcom_pin_offset(((struct msm_gpio_bank *)dev_get_priv(dev))->pin_data, x))
 
 #define GPIO_IN_OUT_REG(dev, x) \
 	(GPIO_CONFIG_REG(dev, x) + 0x4)
