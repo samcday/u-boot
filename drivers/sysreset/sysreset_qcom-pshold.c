@@ -10,6 +10,7 @@
  */
 
 #include <dm.h>
+#include <errno.h>
 #include <sysreset.h>
 #include <asm/io.h>
 #include <linux/delay.h>
@@ -35,9 +36,15 @@ static struct sysreset_ops qcom_pshold_ops = {
 static int qcom_pshold_probe(struct udevice *dev)
 {
 	struct qcom_pshold_priv *priv = dev_get_priv(dev);
+	ulong offset = dev_get_driver_data(dev);
 
 	priv->base = dev_read_addr(dev);
-	return priv->base == FDT_ADDR_T_NONE ? -EINVAL : 0;
+	if (priv->base == FDT_ADDR_T_NONE)
+		return -EINVAL;
+
+	priv->base += offset;
+
+	return 0;
 }
 
 static const struct udevice_id qcom_pshold_ids[] = {
