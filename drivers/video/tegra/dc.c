@@ -32,7 +32,7 @@ struct tegra_dc_soc_info {
 struct tegra_lcd_priv {
 	int width;			/* width in pixels */
 	int height;			/* height in pixels */
-	enum video_log2_bpp log2_bpp;	/* colour depth */
+	enum video_bpp bpix;		/* colour depth */
 	struct display_timing timing;
 	struct udevice *panel;		/* Panels attached to RGB */
 	struct udevice *bridge;		/* Bridge linked with DC */
@@ -51,7 +51,7 @@ enum {
 	/* Maximum LCD size we support */
 	LCD_MAX_WIDTH		= 2560,
 	LCD_MAX_HEIGHT		= 1600,
-	LCD_MAX_LOG2_BPP	= VIDEO_BPP16,
+	LCD_MAX_BPP		= VIDEO_BPP16,
 };
 
 static void update_window(struct tegra_lcd_priv *priv,
@@ -278,11 +278,11 @@ static int setup_window(struct tegra_lcd_priv *priv,
 	win->out_w = priv->width;
 	win->out_h = priv->height;
 	win->phys_addr = priv->frame_buffer;
-	win->stride = priv->width * (1 << priv->log2_bpp) / 8;
+	win->stride = priv->width * VNBYTES(priv->bpix);
 
-	log_debug("%s: depth = %d\n", __func__, priv->log2_bpp);
+	log_debug("%s: depth = %d\n", __func__, priv->bpix);
 
-	switch (priv->log2_bpp) {
+	switch (priv->bpix) {
 	case VIDEO_BPP32:
 		win->fmt = COLOR_DEPTH_R8G8B8A8;
 		win->bpp = 32;
@@ -435,7 +435,7 @@ static int tegra_lcd_probe(struct udevice *dev)
 
 	uc_priv->xsize = priv->width;
 	uc_priv->ysize = priv->height;
-	uc_priv->bpix = priv->log2_bpp;
+	uc_priv->bpix = priv->bpix;
 	log_debug("LCD frame buffer at %08x, size %x\n", priv->frame_buffer,
 		  plat->size);
 
@@ -636,7 +636,7 @@ static int tegra_lcd_of_to_plat(struct udevice *dev)
 	priv->width = timing->hactive.typ;
 	priv->height = timing->vactive.typ;
 	priv->pixel_clock = timing->pixelclock.typ;
-	priv->log2_bpp = VIDEO_BPP16;
+	priv->bpix = VIDEO_BPP16;
 
 	return 0;
 }
@@ -645,8 +645,7 @@ static int tegra_lcd_bind(struct udevice *dev)
 {
 	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
 
-	plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
-		(1 << LCD_MAX_LOG2_BPP) / 8;
+	plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT * VNBYTES(LCD_MAX_BPP);
 
 	return dm_scan_fdt_dev(dev);
 }

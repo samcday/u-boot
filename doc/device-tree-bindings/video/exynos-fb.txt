@@ -9,7 +9,8 @@ Board(panel specific):
 	samsung,vl-col: X resolution of the panel
 	samsung,vl-row: Y resolution of the panel
 	samsung,vl-freq: Refresh rate
-	samsung,vl-bpix: Bits per pixel
+	samsung,vl-bpix: Log base 2 of the framebuffer bits per pixel
+			  (4 = 16bpp, 5 = 32bpp)
 	samsung,vl-hspw: Hsync value
 	samsung,vl-hfpd: Right margin
 	samsung,vl-hbpd: Left margin

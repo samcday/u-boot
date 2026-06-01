@@ -44,22 +44,25 @@ enum video_polarity {
 	VIDEO_ACTIVE_LOW,	/* Pins are active low */
 };
 
-/*
- * Bits per pixel selector. Each value n is such that the bits-per-pixel is
- * 2 ^ n
- */
-enum video_log2_bpp {
-	VIDEO_BPP1	= 0,
-	VIDEO_BPP2,
-	VIDEO_BPP4,
-	VIDEO_BPP8,
-	VIDEO_BPP16,
-	VIDEO_BPP32,
+/* Bits per pixel selector */
+enum video_bpp {
+	VIDEO_BPP1	= 1,
+	VIDEO_BPP2	= 2,
+	VIDEO_BPP4	= 4,
+	VIDEO_BPP8	= 8,
+	VIDEO_BPP16	= 16,
+	VIDEO_BPP24	= 24,
+	VIDEO_BPP32	= 32,
 };
 
-/* Convert enum video_log2_bpp to bytes and bits */
-#define VNBYTES(bpix)	((1 << (bpix)) / 8)
-#define VNBITS(bpix)	(1 << (bpix))
+static inline enum video_bpp video_bpp_from_log2(uint log2_bpp)
+{
+	return (enum video_bpp)(1U << log2_bpp);
+}
+
+/* Convert enum video_bpp to bytes and bits */
+#define VNBYTES(bpix)	((bpix) / 8)
+#define VNBITS(bpix)	(bpix)
 
 enum video_format {
 	VIDEO_UNKNOWN,
@@ -76,7 +79,7 @@ enum video_format {
  * @ysize:	Number of pixels rows (e.g.. 768)
  * @rot:	Display rotation (0=none, 1=90 degrees clockwise, etc.). THis
  *		does not affect @xsize and @ysize
- * @bpix:	Encoded bits per pixel (enum video_log2_bpp)
+ * @bpix:	Bits per pixel (enum video_bpp)
  * @format:	Pixel format (enum video_format)
  * @vidconsole_drv_name:	Driver to use for the text console, NULL to
  *		select automatically
@@ -107,7 +110,7 @@ struct video_priv {
 	ushort xsize;
 	ushort ysize;
 	ushort rot;
-	enum video_log2_bpp bpix;
+	enum video_bpp bpix;
 	enum video_format format;
 	const char *vidconsole_drv_name;
 	int font_size;
@@ -162,7 +165,7 @@ struct video_ops {
  * @line_length:	Length of each frame buffer line, in bytes. This can be
  *		set by the driver, but if not, the uclass will set it after
  *		probing
- * @bpix:	Encoded bits per pixel (enum video_log2_bpp)
+ * @bpix:	Bits per pixel (enum video_bpp)
  * @format:	Video format (enum video_format)
  */
 struct video_handoff {
@@ -308,7 +311,7 @@ void video_sync_all(void);
  * @bmp_image: Pointer to BMP image to check
  * @widthp: Returns width in pixels
  * @heightp: Returns height in pixels
- * @bpixp: Returns log2 of bits per pixel
+ * @bpixp: Returns bits per pixel
  */
 void video_bmp_get_info(void *bmp_image, ulong *widthp, ulong *heightp,
 			uint *bpixp);

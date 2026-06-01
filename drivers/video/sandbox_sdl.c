@@ -45,12 +45,12 @@ static int sandbox_sdl_probe(struct udevice *dev)
 	return 0;
 }
 
-static void set_bpp(struct udevice *dev, enum video_log2_bpp l2bpp)
+static void set_bpp(struct udevice *dev, enum video_bpp bpix)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 	struct sandbox_sdl_plat *plat = dev_get_plat(dev);
 
-	plat->bpix = l2bpp;
+	plat->bpix = bpix;
 
 	uc_plat->size = plat->xres * plat->yres * VNBYTES(plat->bpix);
 
@@ -76,7 +76,7 @@ static void set_bpp(struct udevice *dev, enum video_log2_bpp l2bpp)
 		uc_plat->size *= 2;
 }
 
-int sandbox_sdl_set_bpp(struct udevice *dev, enum video_log2_bpp l2bpp)
+int sandbox_sdl_set_bpp(struct udevice *dev, enum video_bpp bpix)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 	int ret;
@@ -86,7 +86,7 @@ int sandbox_sdl_set_bpp(struct udevice *dev, enum video_log2_bpp l2bpp)
 	sandbox_sdl_remove_display();
 
 	uc_plat->hide_logo = true;
-	set_bpp(dev, l2bpp);
+	set_bpp(dev, bpix);
 
 	ret = device_probe(dev);
 	if (ret)
@@ -111,15 +111,17 @@ static int sandbox_sdl_remove(struct udevice *dev)
 static int sandbox_sdl_bind(struct udevice *dev)
 {
 	struct sandbox_sdl_plat *plat = dev_get_plat(dev);
-	enum video_log2_bpp l2bpp;
+	enum video_bpp bpix;
+	uint log2_bpp;
 	int ret = 0;
 
 	plat->xres = dev_read_u32_default(dev, "xres", LCD_MAX_WIDTH);
 	plat->yres = dev_read_u32_default(dev, "yres", LCD_MAX_HEIGHT);
-	l2bpp = dev_read_u32_default(dev, "log2-depth", VIDEO_BPP16);
+	log2_bpp = dev_read_u32_default(dev, "log2-depth", 4);
+	bpix = video_bpp_from_log2(log2_bpp);
 	plat->rot = dev_read_u32_default(dev, "rotate", 0);
 
-	set_bpp(dev, l2bpp);
+	set_bpp(dev, bpix);
 
 	return ret;
 }

@@ -80,7 +80,7 @@ enum {
 	/* Maximum LCD size we support */
 	LCD_MAX_WIDTH		= 640,
 	LCD_MAX_HEIGHT		= 480,
-	LCD_MAX_LOG2_BPP	= VIDEO_BPP16,
+	LCD_MAX_BPP		= VIDEO_BPP16,
 };
 
 struct mvebu_lcd_info {
@@ -575,8 +575,7 @@ static int mvebu_video_bind(struct udevice *dev)
 {
 	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
 
-	plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
-		(1 << LCD_MAX_LOG2_BPP) / 8;
+	plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT * VNBYTES(LCD_MAX_BPP);
 
 	return 0;
 }

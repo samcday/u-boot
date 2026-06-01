@@ -19,7 +19,7 @@ enum {
 	/* Maximum size we support */
 	VPU_MAX_WIDTH		= 3840,
 	VPU_MAX_HEIGHT		= 2160,
-	VPU_MAX_LOG2_BPP	= VIDEO_BPP32,
+	VPU_MAX_BPP		= VIDEO_BPP32,
 };
 
 enum vpu_compatible {
