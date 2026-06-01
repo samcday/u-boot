@@ -155,6 +155,15 @@ config VIDEO_BPP16
 	  this option, such displays will not be supported and console output
 	  will be empty.
 
+config VIDEO_BPP24
+	bool "Support 24-bit-per-pixel displays"
+	default y
+	help
+	  Support drawing text and bitmaps onto a 24-bit-per-pixel display.
+	  Enabling this will include code to support this display. Without
+	  this option, such displays will not be supported and console output
+	  will be empty.
+
 config VIDEO_BPP32
 	bool "Support 32-bit-per-pixel displays"
 	default y
@@ -1394,6 +1403,15 @@ config SPL_VIDEO_BPP16
 	default y
 	help
 	  Support drawing text and bitmaps onto a 16-bit-per-pixel display.
+	  Enabling this will include code to support this display. Without
+	  this option, such displays will not be supported and console output
+	  will be empty.
+
+config SPL_VIDEO_BPP24
+	bool "Support 24-bit-per-pixel displays at SPL"
+	default y
+	help
+	  Support drawing text and bitmaps onto a 24-bit-per-pixel display.
 	  Enabling this will include code to support this display. Without
 	  this option, such displays will not be supported and console output
 	  will be empty.
