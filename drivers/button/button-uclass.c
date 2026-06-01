@@ -45,6 +45,7 @@ static int button_remap_phone_keys(int code)
 		return KEY_UP;
 	case KEY_VOLUMEDOWN:
 		return KEY_DOWN;
+	case KEY_HOMEPAGE:
 	case KEY_POWER:
 		return KEY_ENTER;
 	default:

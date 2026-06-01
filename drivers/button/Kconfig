@@ -18,7 +18,7 @@ config BUTTON_REMAP_PHONE_KEYS
 	  are remapped to the following navigation keys:
 	  - Volume up: Up
 	  - Volume down: Down
-	  - Power: Enter
+	  - Home/Power: Enter
 
 config BUTTON_ADC
 	bool "Button adc"
