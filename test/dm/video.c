@@ -24,11 +24,8 @@
 
 /*
  * These tests use the standard sandbox frame buffer, the resolution of which
- * is defined in the device tree. This only supports 16bpp so the tests only
- * test that code path. It would be possible to adjust this fairly easily,
- * by adjusting the bpix value in struct sandbox_sdl_plat. However the code
- * in sandbox_sdl_sync() would also need to change to handle the different
- * surface depth.
+ * is defined in the device tree. Tests can adjust the depth by updating the
+ * bpix value in struct sandbox_sdl_plat.
  */
 /* Basic test of the video uclass */
 static int dm_test_video_base(struct unit_test_state *uts)
@@ -495,6 +492,30 @@ static int dm_test_video_bmp24_32(struct unit_test_state *uts)
 	return 0;
 }
 DM_TEST(dm_test_video_bmp24_32, UTF_SCAN_PDATA | UTF_SCAN_FDT);
+
+/* Test drawing a 24bpp bitmap file on a 24bpp display */
+static int dm_test_video_bmp24_24(struct unit_test_state *uts)
+{
+	ulong src, src_len = ~0UL;
+	uint dst_len = ~0U;
+	struct udevice *dev;
+	ulong dst = 0x10000;
+
+	ut_assertok(uclass_find_first_device(UCLASS_VIDEO, &dev));
+	ut_assertnonnull(dev);
+	ut_assertok(sandbox_sdl_set_bpp(dev, VIDEO_BPP24));
+
+	ut_assertok(read_file(uts, "tools/logos/denx-24bpp.bmp.gz", &src));
+	ut_assertok(gunzip(map_sysmem(dst, 0), dst_len, map_sysmem(src, 0),
+			   &src_len));
+
+	ut_assertok(video_bmp_display(dev, dst, 0, 0, false));
+	ut_asserteq(5673, video_compress_fb(uts, dev, false));
+	ut_assertok(video_check_copy_fb(uts, dev));
+
+	return 0;
+}
+DM_TEST(dm_test_video_bmp24_24, UTF_SCAN_PDATA | UTF_SCAN_FDT);
 
 /* Test drawing a bitmap file on a 32bpp display */
 static int dm_test_video_bmp32(struct unit_test_state *uts)
