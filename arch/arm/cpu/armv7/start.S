@@ -37,10 +37,15 @@
 #endif
 
 reset:
-	/* Allow the board to save important registers */
-	b	save_boot_params
-save_boot_params_ret:
 #ifdef CONFIG_POSITION_INDEPENDENT
+	/*
+	 * save_boot_params() wants a peek at r0/r1/r2, which get clobbered during
+	 * relocation, so we snapshot them now.
+	 */
+	mov	r5, r0
+	mov	r6, r1
+	mov	r7, r2
+
 	/*
 	 * Fix .rela.dyn relocations. This allows U-Boot to loaded to and
 	 * executed at a different address than it was linked at.
@@ -74,7 +79,14 @@ pie_skip_reloc:
 	cmp	r2, r3
 	blo	pie_fix_loop
 pie_fixup_done:
+	/* restore r0/r1/r2 for save_boot_params() */
+	mov	r0, r5
+	mov	r1, r6
+	mov	r2, r7
 #endif
+	/* Allow the board to save important registers */
+	b	save_boot_params
+save_boot_params_ret:
 
 #ifdef CONFIG_ARMV7_LPAE
 /*
