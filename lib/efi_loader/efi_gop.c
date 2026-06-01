@@ -25,6 +25,7 @@ static const efi_guid_t efi_gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
  * @mode:	graphical output mode
  * @vdev:	backing video device
  * @bpix:	bits per pixel
+ * @line_length: bytes per scanline in the frame buffer
  * @fb:		frame buffer
  */
 struct efi_gop_obj {
@@ -35,6 +36,7 @@ struct efi_gop_obj {
 	struct udevice *vdev;
 	/* Fields we only have access to during init */
 	u32 bpix;
+	u32 line_length;
 	void *fb;
 };
 
@@ -106,6 +108,26 @@ static __always_inline u16 efi_blt_col_to_vid16(struct efi_gop_pixel *blt)
 	       (u16)(blt->blue  >> 3);
 }
 
+static __always_inline struct efi_gop_pixel efi_vid24_to_blt_col(u8 *vid)
+{
+	struct efi_gop_pixel blt = {
+		.reserved = 0,
+	};
+
+	blt.blue  = vid[0];
+	blt.green = vid[1];
+	blt.red   = vid[2];
+	return blt;
+}
+
+static __always_inline void efi_blt_col_to_vid24(u8 *vid,
+						 struct efi_gop_pixel *blt)
+{
+	vid[0] = blt->blue;
+	vid[1] = blt->green;
+	vid[2] = blt->red;
+}
+
 static __always_inline efi_status_t gop_blt_int(struct efi_gop *this,
 						struct efi_gop_pixel *bufferp,
 						u32 operation, efi_uintn_t sx,
@@ -117,11 +139,11 @@ static __always_inline efi_status_t gop_blt_int(struct efi_gop *this,
 						efi_uintn_t vid_bpp)
 {
 	struct efi_gop_obj *gopobj = container_of(this, struct efi_gop_obj, ops);
-	efi_uintn_t i, j, linelen, slineoff = 0, dlineoff, swidth, dwidth;
-	u32 *fb32 = gopobj->fb;
-	u16 *fb16 = gopobj->fb;
+	efi_uintn_t i, j, linelen;
+	u8 *fb = gopobj->fb;
 	struct efi_gop_pixel *buffer = __builtin_assume_aligned(bufferp, 4);
 	bool blt_to_video = (operation != EFI_BLT_VIDEO_TO_BLT_BUFFER);
+	efi_uintn_t vid_bytes;
 
 	if (delta) {
 		/* Check for 4 byte alignment */
@@ -165,37 +187,11 @@ static __always_inline efi_status_t gop_blt_int(struct efi_gop *this,
 		break;
 	}
 
-	/* Calculate line width */
-	switch (operation) {
-	case EFI_BLT_BUFFER_TO_VIDEO:
-		swidth = linelen;
-		break;
-	case EFI_BLT_VIDEO_TO_BLT_BUFFER:
-	case EFI_BLT_VIDEO_TO_VIDEO:
-		swidth = gopobj->info.width;
-		if (!vid_bpp)
-			return EFI_UNSUPPORTED;
-		break;
-	case EFI_BLT_VIDEO_FILL:
-		swidth = 0;
-		break;
-	}
+	if (!vid_bpp)
+		return EFI_UNSUPPORTED;
 
-	switch (operation) {
-	case EFI_BLT_BUFFER_TO_VIDEO:
-	case EFI_BLT_VIDEO_FILL:
-	case EFI_BLT_VIDEO_TO_VIDEO:
-		dwidth = gopobj->info.width;
-		if (!vid_bpp)
-			return EFI_UNSUPPORTED;
-		break;
-	case EFI_BLT_VIDEO_TO_BLT_BUFFER:
-		dwidth = linelen;
-		break;
-	}
+	vid_bytes = VNBYTES(gopobj->bpix);
 
-	slineoff = swidth * sy;
-	dlineoff = dwidth * dy;
 	for (i = 0; i < height; i++) {
 		for (j = 0; j < width; j++) {
 			struct efi_gop_pixel pix;
@@ -206,43 +202,50 @@ static __always_inline efi_status_t gop_blt_int(struct efi_gop *this,
 				pix = *buffer;
 				break;
 			case EFI_BLT_BUFFER_TO_VIDEO:
-				pix = buffer[slineoff + j + sx];
+				pix = buffer[(sy + i) * linelen + j + sx];
 				break;
 			case EFI_BLT_VIDEO_TO_BLT_BUFFER:
 			case EFI_BLT_VIDEO_TO_VIDEO:
+			{
+				u8 *vid = fb + (sy + i) * gopobj->line_length +
+					  (sx + j) * vid_bytes;
+
 				if (vid_bpp == 32)
-					pix = *(struct efi_gop_pixel *)&fb32[
-						slineoff + j + sx];
+					pix = *(struct efi_gop_pixel *)vid;
 				else if (vid_bpp == 30)
-					pix = efi_vid30_to_blt_col(fb32[
-						slineoff + j + sx]);
+					pix = efi_vid30_to_blt_col(*(u32 *)vid);
+				else if (vid_bpp == 24)
+					pix = efi_vid24_to_blt_col(vid);
 				else
-					pix = efi_vid16_to_blt_col(fb16[
-						slineoff + j + sx]);
+					pix = efi_vid16_to_blt_col(*(u16 *)vid);
 				break;
+			}
 			}
 
 			/* Write destination pixel */
 			switch (operation) {
 			case EFI_BLT_VIDEO_TO_BLT_BUFFER:
-				buffer[dlineoff + j + dx] = pix;
+				buffer[(dy + i) * linelen + j + dx] = pix;
 				break;
 			case EFI_BLT_BUFFER_TO_VIDEO:
 			case EFI_BLT_VIDEO_FILL:
 			case EFI_BLT_VIDEO_TO_VIDEO:
+			{
+				u8 *vid = fb + (dy + i) * gopobj->line_length +
+					  (dx + j) * vid_bytes;
+
 				if (vid_bpp == 32)
-					fb32[dlineoff + j + dx] = *(u32 *)&pix;
+					*(u32 *)vid = *(u32 *)&pix;
 				else if (vid_bpp == 30)
-					fb32[dlineoff + j + dx] =
-						efi_blt_col_to_vid30(&pix);
+					*(u32 *)vid = efi_blt_col_to_vid30(&pix);
+				else if (vid_bpp == 24)
+					efi_blt_col_to_vid24(vid, &pix);
 				else
-					fb16[dlineoff + j + dx] =
-						efi_blt_col_to_vid16(&pix);
+					*(u16 *)vid = efi_blt_col_to_vid16(&pix);
 				break;
 			}
+			}
 		}
-		slineoff += swidth;
-		dlineoff += dwidth;
 	}
 
 	if (blt_to_video)
@@ -262,6 +265,9 @@ static efi_uintn_t gop_get_bpp(struct efi_gop *this)
 			vid_bpp = 32;
 		else
 			vid_bpp = 30;
+		break;
+	case VIDEO_BPP24:
+		vid_bpp = 24;
 		break;
 	case VIDEO_BPP16:
 		vid_bpp = 16;
@@ -312,6 +318,17 @@ static efi_status_t gop_blt_buf_to_vid30(struct efi_gop *this,
 {
 	return gop_blt_int(this, buffer, EFI_BLT_BUFFER_TO_VIDEO, sx, sy, dx,
 			   dy, width, height, delta, 30);
+}
+
+static efi_status_t gop_blt_buf_to_vid24(struct efi_gop *this,
+					 struct efi_gop_pixel *buffer,
+					 u32 foo, efi_uintn_t sx,
+					 efi_uintn_t sy, efi_uintn_t dx,
+					 efi_uintn_t dy, efi_uintn_t width,
+					 efi_uintn_t height, efi_uintn_t delta)
+{
+	return gop_blt_int(this, buffer, EFI_BLT_BUFFER_TO_VIDEO, sx, sy, dx,
+			   dy, width, height, delta, 24);
 }
 
 static efi_status_t gop_blt_buf_to_vid32(struct efi_gop *this,
@@ -427,13 +444,17 @@ static efi_status_t EFIAPI gop_blt(struct efi_gop *this,
 					 dy, width, height, delta, vid_bpp);
 		break;
 	case EFI_BLT_BUFFER_TO_VIDEO:
-		/* This needs to be super-fast, so duplicate for 16/32bpp */
+		/* This needs to be super-fast, so duplicate for 16/24/32bpp */
 		if (vid_bpp == 32)
 			ret = gop_blt_buf_to_vid32(this, buffer, operation, sx,
 						   sy, dx, dy, width, height,
 						   delta);
 		else if (vid_bpp == 30)
 			ret = gop_blt_buf_to_vid30(this, buffer, operation, sx,
+						   sy, dx, dy, width, height,
+						   delta);
+		else if (vid_bpp == 24)
+			ret = gop_blt_buf_to_vid24(this, buffer, operation, sx,
 						   sy, dx, dy, width, height,
 						   delta);
 		else
@@ -495,10 +516,11 @@ efi_status_t efi_gop_register(void)
 
 	switch (bpix) {
 	case VIDEO_BPP16:
+	case VIDEO_BPP24:
 	case VIDEO_BPP32:
 		break;
 	default:
-		/* So far, we only work in 16 or 32 bit mode */
+		/* So far, we only work in 16, 24 or 32 bit mode */
 		debug("WARNING: Unsupported video mode\n");
 		return EFI_SUCCESS;
 	}
@@ -534,8 +556,7 @@ efi_status_t efi_gop_register(void)
 	gopobj->info.version = 0;
 	gopobj->info.width = col;
 	gopobj->info.height = row;
-	if (bpix == VIDEO_BPP32)
-	{
+	if (bpix == VIDEO_BPP32) {
 		if (format == VIDEO_X2R10G10B10) {
 			gopobj->info.pixel_format = EFI_GOT_BITMASK;
 			gopobj->info.pixel_bitmask[0] = 0x3ff00000; /* red */
@@ -545,14 +566,20 @@ efi_status_t efi_gop_register(void)
 		} else {
 			gopobj->info.pixel_format = EFI_GOT_BGRA8;
 		}
+	} else if (bpix == VIDEO_BPP24) {
+		gopobj->info.pixel_format = EFI_GOT_BITMASK;
+		gopobj->info.pixel_bitmask[0] = 0xff0000; /* red */
+		gopobj->info.pixel_bitmask[1] = 0x00ff00; /* green */
+		gopobj->info.pixel_bitmask[2] = 0x0000ff; /* blue */
 	} else {
 		gopobj->info.pixel_format = EFI_GOT_BITMASK;
 		gopobj->info.pixel_bitmask[0] = 0xf800; /* red */
 		gopobj->info.pixel_bitmask[1] = 0x07e0; /* green */
 		gopobj->info.pixel_bitmask[2] = 0x001f; /* blue */
 	}
-	gopobj->info.pixels_per_scanline = col;
+	gopobj->info.pixels_per_scanline = priv->line_length / VNBYTES(bpix);
 	gopobj->bpix = bpix;
+	gopobj->line_length = priv->line_length;
 	gopobj->fb = map_sysmem(fb_base, fb_size);
 	gopobj->vdev = vdev;
 
