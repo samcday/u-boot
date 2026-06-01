@@ -345,9 +345,11 @@ int vesa_setup_video_priv(struct vesa_mode_info *vesa, u64 fb,
 	uc_priv->line_length = vesa->bytes_per_scanline;
 	switch (vesa->bits_per_pixel) {
 	case 32:
-	case 24:
 		uc_priv->bpix = VIDEO_BPP32;
 		uc_priv->format = VIDEO_X8B8G8R8;
+		break;
+	case 24:
+		uc_priv->bpix = VIDEO_BPP24;
 		break;
 	case 16:
 		uc_priv->bpix = VIDEO_BPP16;

@@ -521,9 +521,8 @@ static int nx_display_probe(struct udevice *dev)
 		uc_priv->bpix = VIDEO_BPP16;
 		break;
 	case 3:
-		/* There is no VIDEO_BPP24 because these values are of
-		 * type video_log2_bpp
-		 */
+		uc_priv->bpix = VIDEO_BPP24;
+		break;
 	case 4:
 		uc_priv->bpix = VIDEO_BPP32;
 		break;

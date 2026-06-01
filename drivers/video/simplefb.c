@@ -67,6 +67,8 @@ static int simple_video_probe(struct udevice *dev)
 
 	if (strcmp(format, "r5g6b5") == 0) {
 		uc_priv->bpix = VIDEO_BPP16;
+	} else if (strcmp(format, "r8g8b8") == 0) {
+		uc_priv->bpix = VIDEO_BPP24;
 	} else if (strcmp(format, "a8b8g8r8") == 0 ||
 		   strcmp(format, "x8b8g8r8") == 0) {
 		uc_priv->bpix = VIDEO_BPP32;
