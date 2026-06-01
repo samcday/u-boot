@@ -71,7 +71,7 @@ cvbs:
 		uc_priv->ysize = 576;
 	}
 
-	uc_priv->bpix = VPU_MAX_LOG2_BPP;
+	uc_priv->bpix = VPU_MAX_BPP;
 
 	meson_fb.is_cvbs = is_cvbs;
 	meson_fb.xsize = uc_priv->xsize;
@@ -79,7 +79,7 @@ cvbs:
 
 	/* Move the framebuffer to the end of addressable ram */
 	meson_fb.fb_size = ALIGN(meson_fb.xsize * meson_fb.ysize *
-				 ((1 << VPU_MAX_LOG2_BPP) / 8) +
+				 VNBYTES(VPU_MAX_BPP) +
 				 MESON_VPU_OVERSCAN, EFI_PAGE_SIZE);
 	meson_fb.base = gd->bd->bi_dram[0].start +
 			gd->bd->bi_dram[0].size - meson_fb.fb_size;
@@ -140,8 +140,7 @@ static int meson_vpu_bind(struct udevice *dev)
 {
 	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
 
-	plat->size = VPU_MAX_WIDTH * VPU_MAX_HEIGHT *
-		(1 << VPU_MAX_LOG2_BPP) / 8;
+	plat->size = VPU_MAX_WIDTH * VPU_MAX_HEIGHT * VNBYTES(VPU_MAX_BPP);
 
 	return 0;
 }

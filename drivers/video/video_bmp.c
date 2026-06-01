@@ -73,13 +73,12 @@ static void write_pix8(u8 *fb, uint bpix, enum video_format eformat,
 	} else if (bpix == 16) {
 		*(u16 *)fb = get_bmp_col_16bpp(palette[*bmap]);
 	} else {
-		/* Only support big endian */
 		struct bmp_color_table_entry *cte = &palette[*bmap];
 
 		if (bpix == 24) {
-			*fb++ = cte->red;
-			*fb++ = cte->green;
 			*fb++ = cte->blue;
+			*fb++ = cte->green;
+			*fb++ = cte->red;
 		} else if (eformat == VIDEO_X2R10G10B10) {
 			*(u32 *)fb = get_bmp_col_x2r10g10b10(cte);
 		} else if (eformat == VIDEO_RGBA8888) {
@@ -280,12 +279,12 @@ int video_bmp_display(struct udevice *dev, ulong bmp_image, int x, int y,
 	debug("hdr_size=%d, bmp_bpix=%d\n", hdr_size, bmp_bpix);
 	palette = (void *)bmp + 14 + hdr_size;
 
-	colours = 1 << bmp_bpix;
+	colours = bmp_bpix <= 8 ? 1 << bmp_bpix : 0;
 
 	bpix = VNBITS(priv->bpix);
 	eformat = priv->format;
 
-	if (bpix != 1 && bpix != 8 && bpix != 16 && bpix != 32) {
+	if (bpix != 1 && bpix != 8 && bpix != 16 && bpix != 24 && bpix != 32) {
 		printf("Error: %d bit/pixel mode, but BMP has %d bit/pixel\n",
 		       bpix, bmp_bpix);
 
@@ -293,8 +292,8 @@ int video_bmp_display(struct udevice *dev, ulong bmp_image, int x, int y,
 	}
 
 	/*
-	 * We support displaying 8bpp and 24bpp BMPs on 16bpp LCDs
-	 * and displaying 24bpp BMPs on 32bpp LCDs
+	 * We support displaying 8bpp BMPs on 16/24/32bpp LCDs and
+	 * displaying 24bpp BMPs on 16/24/32bpp LCDs
 	 */
 	if (bpix != bmp_bpix &&
 	    !(bmp_bpix == 8 && bpix == 16) &&
@@ -303,12 +302,12 @@ int video_bmp_display(struct udevice *dev, ulong bmp_image, int x, int y,
 	    !(bmp_bpix == 24 && bpix == 16) &&
 	    !(bmp_bpix == 24 && bpix == 32)) {
 		printf("Error: %d bit/pixel mode, but BMP has %d bit/pixel\n",
-		       bpix, colours);
+		       bpix, bmp_bpix);
 		return -EPERM;
 	}
 
 	debug("Display-bmp: %d x %d  with %d colours, display %d\n",
-	      (int)width, (int)height, (int)colours, 1 << bpix);
+	      (int)width, (int)height, (int)colours, bpix);
 
 	padded_width = (width & 0x3 ? (width & ~0x3) + 4 : width);
 
@@ -384,6 +383,10 @@ int video_bmp_display(struct udevice *dev, ulong bmp_image, int x, int y,
 							(bmap[0] >> 3);
 						bmap += 3;
 						fb += 2;
+					} else if (bpix == 24) {
+						*fb++ = *bmap++;
+						*fb++ = *bmap++;
+						*fb++ = *bmap++;
 					} else if (eformat == VIDEO_X2R10G10B10) {
 						u32 pix;
 

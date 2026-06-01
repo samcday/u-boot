@@ -253,7 +253,7 @@ static int rk_display_init(struct udevice *dev, ulong fbbase, ofnode ep_node)
 	u32 remote_phandle;
 	struct display_plat *disp_uc_plat;
 	struct clk clk;
-	enum video_log2_bpp l2bpp;
+	enum video_bpp bpix;
 	ofnode remote;
 	const char *compat;
 	struct reset_ctl dclk_rst;
@@ -363,14 +363,14 @@ static int rk_display_init(struct udevice *dev, ulong fbbase, ofnode ep_node)
 #if defined(CONFIG_ROCKCHIP_RK3288)
 	case VOP_MODE_LVDS:
 #endif
-		l2bpp = VIDEO_BPP16;
+		bpix = VIDEO_BPP16;
 		break;
 	case VOP_MODE_HDMI:
 	case VOP_MODE_MIPI:
-		l2bpp = VIDEO_BPP32;
+		bpix = VIDEO_BPP32;
 		break;
 	default:
-		l2bpp = VIDEO_BPP16;
+		bpix = VIDEO_BPP16;
 	}
 
 	rkvop_mode_set(dev, &timing, vop_id);
@@ -381,15 +381,15 @@ static int rk_display_init(struct udevice *dev, ulong fbbase, ofnode ep_node)
 		return ret;
 	}
 
-	rkvop_enable(dev, fbbase, 1 << l2bpp, &timing, &dclk_rst);
+	rkvop_enable(dev, fbbase, bpix, &timing, &dclk_rst);
 
-	ret = display_enable(disp, 1 << l2bpp, &timing);
+	ret = display_enable(disp, bpix, &timing);
 	if (ret)
 		return ret;
 
 	uc_priv->xsize = timing.hactive.typ;
 	uc_priv->ysize = timing.vactive.typ;
-	uc_priv->bpix = l2bpp;
+	uc_priv->bpix = bpix;
 	debug("fb=%lx, size=%d %d\n", fbbase, uc_priv->xsize, uc_priv->ysize);
 
 	return 0;

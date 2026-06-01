@@ -572,7 +572,7 @@ enum {
 	/* Maximum display size we support */
 	LCD_MAX_WIDTH = 1920,
 	LCD_MAX_HEIGHT = 1080,
-	LCD_MAX_LOG2_BPP = VIDEO_BPP16,
+	LCD_MAX_BPP = VIDEO_BPP16,
 };
 
 static int ipuv3_video_probe(struct udevice *dev)
@@ -637,7 +637,7 @@ static int ipuv3_video_probe(struct udevice *dev)
 
 	uc_priv->xsize = gmode->xres;
 	uc_priv->ysize = gmode->yres;
-	uc_priv->bpix = LCD_MAX_LOG2_BPP;
+	uc_priv->bpix = LCD_MAX_BPP;
 
 	/* Enable dcache for the frame buffer */
 	fb_start = plat->base & ~(MMU_SECTION_SIZE - 1);
@@ -654,7 +654,7 @@ static int ipuv3_video_bind(struct udevice *dev)
 {
 	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
 
-	plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT * (1 << VIDEO_BPP32) / 8;
+	plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT * VNBYTES(VIDEO_BPP32);
 
 	return 0;
 }

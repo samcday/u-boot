@@ -422,11 +422,11 @@ enum {
 	/* Maximum LCD size we support */
 	LCD_MAX_WIDTH		= 1920,
 	LCD_MAX_HEIGHT		= 1200,
-	LCD_MAX_LOG2_BPP	= 4,		/* 2^4 = 16 bpp */
+	LCD_MAX_BPP		= VIDEO_BPP16,
 };
 
 static int tegra124_lcd_init(struct udevice *dev, void *lcdbase,
-			     enum video_log2_bpp l2bpp)
+			     enum video_bpp bpix)
 {
 	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
 	struct display_timing timing;
@@ -448,13 +448,13 @@ static int tegra124_lcd_init(struct udevice *dev, void *lcdbase,
 	reset_set_enable(PERIPH_ID_DPAUX, 0);
 	reset_set_enable(PERIPH_ID_SOR0, 0);
 
-	ret = display_init(dev, lcdbase, 1 << l2bpp, &timing);
+	ret = display_init(dev, lcdbase, bpix, &timing);
 	if (ret)
 		return ret;
 
 	uc_priv->xsize = roundup(timing.hactive.typ, 16);
 	uc_priv->ysize = timing.vactive.typ;
-	uc_priv->bpix = l2bpp;
+	uc_priv->bpix = bpix;
 
 	video_set_flush_dcache(dev, 1);
 	debug("%s: done\n", __func__);
@@ -483,8 +483,7 @@ static int tegra124_lcd_bind(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 
-	uc_plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
-			(1 << VIDEO_BPP16) / 8;
+	uc_plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT * VNBYTES(LCD_MAX_BPP);
 	debug("%s: Frame buffer size %x\n", __func__, uc_plat->size);
 
 	return 0;

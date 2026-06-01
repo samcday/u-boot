@@ -16,14 +16,13 @@
  *
  * @width:	Window width in pixels
  * @height	Window height in pixels
- * @log2_bpp:	Log to base 2 of the number of bits per pixel. So a 32bpp
- *		display will pass 5, since 2*5 = 32
+ * @bpp:	Number of bits per pixel
  * @double_size: true to double the visible size in each direction for high-DPI
  *		displays
  * Return: 0 if OK, -ENODEV if no device, -EIO if SDL failed to initialize
  *		and -EPERM if the video failed to come up.
  */
-int sandbox_sdl_init_display(int width, int height, int log2_bpp,
+int sandbox_sdl_init_display(int width, int height, int bpp,
 			     bool double_size);
 
 /**
@@ -98,14 +97,14 @@ int sandbox_sdl_sound_init(int rate, int channels);
  * It must be called before the display is probed.
  *
  * @dev: Device to adjust
- * @l2bpp: depth to set
+ * @bpix: depth to set
  * Return: 0 if the device was already active, other error if it fails to probe
  * after the change
  */
-int sandbox_sdl_set_bpp(struct udevice *dev, enum video_log2_bpp l2bpp);
+int sandbox_sdl_set_bpp(struct udevice *dev, enum video_bpp bpix);
 
 #else
-static inline int sandbox_sdl_init_display(int width, int height, int log2_bpp,
+static inline int sandbox_sdl_init_display(int width, int height, int bpp,
 					   bool double_size)
 {
 	return -ENODEV;
@@ -152,7 +151,7 @@ static inline int sandbox_sdl_sound_init(int rate, int channels)
 }
 
 static inline int sandbox_sdl_set_bpp(struct udevice *dev,
-				      enum video_log2_bpp l2bpp)
+				      enum video_bpp bpix)
 {
 	return -ENOSYS;
 }

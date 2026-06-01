@@ -46,7 +46,7 @@
 enum {
 	LCD_MAX_WIDTH		= 1920,
 	LCD_MAX_HEIGHT		= 1200,
-	LCD_MAX_LOG2_BPP	= VIDEO_BPP32,
+	LCD_MAX_BPP		= VIDEO_BPP32,
 };
 
 static const u16 *dss_common_regmap;
@@ -986,8 +986,8 @@ static int tidss_drv_bind(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 
-	uc_plat->size = ((LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
-			  (1 << LCD_MAX_LOG2_BPP)) >> 3) + 0x20;
+	uc_plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
+			  VNBYTES(LCD_MAX_BPP) + 0x20;
 	return 0;
 }
 

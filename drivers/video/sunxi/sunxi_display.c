@@ -51,7 +51,7 @@ DECLARE_GLOBAL_DATA_PTR;
 /* Maximum LCD size we support */
 #define LCD_MAX_WIDTH		3840
 #define LCD_MAX_HEIGHT		2160
-#define LCD_MAX_LOG2_BPP	VIDEO_BPP32
+#define LCD_MAX_BPP	VIDEO_BPP32
 
 enum sunxi_monitor {
 	sunxi_monitor_none,
@@ -1246,7 +1246,7 @@ static int sunxi_de_bind(struct udevice *dev)
 {
 	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
 
-	plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT * VNBYTES(LCD_MAX_LOG2_BPP);
+	plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT * VNBYTES(LCD_MAX_BPP);
 
 	return 0;
 }

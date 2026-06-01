@@ -27,7 +27,7 @@ enum {
 	/* Maximum LCD size we support */
 	LCD_MAX_WIDTH		= 3840,
 	LCD_MAX_HEIGHT		= 2160,
-	LCD_MAX_LOG2_BPP	= VIDEO_BPP32,
+	LCD_MAX_BPP		= VIDEO_BPP32,
 };
 
 static void sunxi_de2_composer_init(void)
@@ -178,7 +178,7 @@ static void sunxi_de2_mode_set(int mux, const struct display_timing *mode,
 }
 
 static int sunxi_de2_init(struct udevice *dev, ulong fbbase,
-			  enum video_log2_bpp l2bpp,
+			  enum video_bpp bpix,
 			  struct udevice *disp, int mux, bool is_composite)
 {
 	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
@@ -202,9 +202,9 @@ static int sunxi_de2_init(struct udevice *dev, ulong fbbase,
 	}
 
 	sunxi_de2_composer_init();
-	sunxi_de2_mode_set(mux, &timing, 1 << l2bpp, fbbase, is_composite);
+	sunxi_de2_mode_set(mux, &timing, bpix, fbbase, is_composite);
 
-	ret = display_enable(disp, 1 << l2bpp, &timing);
+	ret = display_enable(disp, bpix, &timing);
 	if (ret) {
 		debug("%s: Failed to enable display\n", __func__);
 		return ret;
@@ -212,13 +212,13 @@ static int sunxi_de2_init(struct udevice *dev, ulong fbbase,
 
 	uc_priv->xsize = timing.hactive.typ;
 	uc_priv->ysize = timing.vactive.typ;
-	uc_priv->bpix = l2bpp;
+	uc_priv->bpix = bpix;
 	debug("fb=%lx, size=%d %d\n", fbbase, uc_priv->xsize, uc_priv->ysize);
 
 #ifdef CONFIG_EFI_LOADER
 	efi_add_memory_map(fbbase,
 			   timing.hactive.typ * timing.vactive.typ *
-			   (1 << l2bpp) / 8,
+			   VNBYTES(bpix),
 			   EFI_RESERVED_MEMORY_TYPE);
 #endif
 
@@ -278,8 +278,7 @@ static int sunxi_de2_bind(struct udevice *dev)
 {
 	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
 
-	plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
-		(1 << LCD_MAX_LOG2_BPP) / 8;
+	plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT * VNBYTES(LCD_MAX_BPP);
 
 	return 0;
 }

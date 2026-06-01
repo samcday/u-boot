@@ -153,7 +153,7 @@ static void exynos_fimd_set_par(struct exynos_fb_priv *priv,
 	cfg |= EXYNOS_WINCON_BURSTLEN_16WORD;
 
 	switch (priv->vl_bpix) {
-	case 4:
+	case VIDEO_BPP16:
 		cfg |= EXYNOS_WINCON_BPPMODE_16BPP_565;
 		break;
 	default:
@@ -485,6 +485,7 @@ int exynos_fb_of_to_plat(struct udevice *dev)
 	unsigned int node = dev_of_offset(dev);
 	const void *blob = gd->fdt_blob;
 	fdt_addr_t addr;
+	int log2_bpp;
 
 	addr = dev_read_addr(dev);
 	if (addr == FDT_ADDR_T_NONE) {
@@ -532,11 +533,12 @@ int exynos_fb_of_to_plat(struct udevice *dev)
 	if (fdtdec_get_bool(blob, node, "samsung,vl-dp"))
 		priv->vl_dp = VIDEO_ACTIVE_LOW;
 
-	priv->vl_bpix = fdtdec_get_int(blob, node, "samsung,vl-bpix", 0);
-	if (priv->vl_bpix == 0) {
+	log2_bpp = fdtdec_get_int(blob, node, "samsung,vl-bpix", 0);
+	if (log2_bpp == 0) {
 		debug("Can't get bits per pixel\n");
 		return -ENXIO;
 	}
+	priv->vl_bpix = video_bpp_from_log2(log2_bpp);
 
 	priv->vl_hspw = fdtdec_get_int(blob, node, "samsung,vl-hspw", 0);
 	if (priv->vl_hspw == 0) {

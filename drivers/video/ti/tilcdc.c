@@ -71,7 +71,7 @@
 enum {
 	LCDC_MAX_WIDTH = 2048,
 	LCDC_MAX_HEIGHT = 2048,
-	LCDC_MAX_LOG2_BPP = VIDEO_BPP32,
+	LCDC_MAX_BPP = VIDEO_BPP32,
 };
 
 struct tilcdc_regs {
@@ -401,7 +401,7 @@ static int tilcdc_probe(struct udevice *dev)
 
 	uc_priv->xsize = timing.hactive.typ;
 	uc_priv->ysize = timing.vactive.typ;
-	uc_priv->bpix = log_2_n_round_up(info.bpp);
+	uc_priv->bpix = info.bpp;
 
 	err = panel_enable_backlight(panel);
 	if (err) {
@@ -430,8 +430,8 @@ static int tilcdc_bind(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 
-	uc_plat->size = ((LCDC_MAX_WIDTH * LCDC_MAX_HEIGHT *
-			  (1 << LCDC_MAX_LOG2_BPP)) >> 3) + 0x20;
+	uc_plat->size = LCDC_MAX_WIDTH * LCDC_MAX_HEIGHT *
+			  VNBYTES(LCDC_MAX_BPP) + 0x20;
 
 	dev_dbg(dev, "frame buffer size 0x%x\n", uc_plat->size);
 	return 0;

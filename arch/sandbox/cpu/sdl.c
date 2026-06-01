@@ -121,11 +121,12 @@ int sandbox_sdl_remove_display(void)
 	return 0;
 }
 
-int sandbox_sdl_init_display(int width, int height, int log2_bpp,
+int sandbox_sdl_init_display(int width, int height, int bpp,
 			     bool double_size)
 {
 	struct sandbox_state *state = state_get_current();
 	int err;
+	uint32_t fmt;
 
 	if (!width || !state->show_lcd)
 		return 0;
@@ -152,10 +153,10 @@ int sandbox_sdl_init_display(int width, int height, int log2_bpp,
 	if (!SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1"))
 		printf("Unable to init hinting: %s", SDL_GetError());
 
-	sdl.src_depth = 1 << log2_bpp;
-	if (log2_bpp != 4 && log2_bpp != 5)
-		log2_bpp = 5;
-	sdl.depth = 1 << log2_bpp;
+	sdl.src_depth = bpp;
+	if (bpp != 16 && bpp != 24 && bpp != 32)
+		bpp = 32;
+	sdl.depth = bpp;
 	sdl.pitch = sdl.width * sdl.depth / 8;
 	sdl.screen = SDL_CreateWindow("U-Boot", SDL_WINDOWPOS_UNDEFINED,
 				      SDL_WINDOWPOS_UNDEFINED, sdl.vis_width,
@@ -174,9 +175,18 @@ int sandbox_sdl_init_display(int width, int height, int log2_bpp,
 		return -EIO;
 	}
 
-	sdl.texture = SDL_CreateTexture(sdl.renderer, log2_bpp == 4 ?
-					SDL_PIXELFORMAT_RGB565 :
-					SDL_PIXELFORMAT_RGB888,
+	switch (bpp) {
+	case 16:
+		fmt = SDL_PIXELFORMAT_RGB565;
+		break;
+	case 24:
+		fmt = SDL_PIXELFORMAT_BGR24;
+		break;
+	default:
+		fmt = SDL_PIXELFORMAT_RGB888;
+		break;
+	}
+	sdl.texture = SDL_CreateTexture(sdl.renderer, fmt,
 					SDL_TEXTUREACCESS_STREAMING,
 					width, height);
 	if (!sdl.texture) {
@@ -207,8 +217,8 @@ static int copy_to_texture(void *lcd_base)
 	 * We only support copying from an 8bpp to a 32bpp texture since the
 	 * other cases are supported directly by the texture.
 	 */
-	if (sdl.depth != 32 && sdl.src_depth != 8) {
-		printf("Need depth 32bpp for copy\n");
+	if (sdl.depth != 32 || sdl.src_depth != 8) {
+		printf("Need 8bpp source and 32bpp depth for copy\n");
 		return -EINVAL;
 	}
 

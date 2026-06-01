@@ -2131,7 +2131,7 @@ static int zynqmp_dpsub_probe(struct udevice *dev)
 	if (ret)
 		return ret;
 
-	uc_priv->bpix = ffs(priv->non_live_graphics->bpp) - 1;
+	uc_priv->bpix = priv->non_live_graphics->bpp;
 	dev_dbg(dev, "BPP in bits %d, bpix %d\n",
 		priv->non_live_graphics->bpp, uc_priv->bpix);
 

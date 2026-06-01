@@ -6,7 +6,8 @@ Required properties:
 - reg: physical base address of the controller and length of memory mapped
        region.
 - clocks: phandles to input clocks.
-- atmel,vl-bpix: Bits per pixel.
+- atmel,vl-bpix: Log base 2 of the framebuffer bits per pixel
+		 (4 = 16bpp, 5 = 32bpp).
 - atmel,output-mode: LCD Controller Output Mode,
   The unit is bits per pixel, there are four values,
   <12>, <16>, <18>, <24>, the default value is <24>.

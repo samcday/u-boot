@@ -152,7 +152,7 @@ extern struct unit_test_state global_dm_test_state;
  *
  * @xres: Width of display in pixels
  * @yres: Height of display in pixels
- * @bpix: Log2 of bits per pixel (enum video_log2_bpp)
+ * @bpix: Bits per pixel (enum video_bpp)
  * @rot: Console rotation (0=normal orientation, 1=90 degrees clockwise,
  *	2=upside down, 3=90 degree counterclockwise)
  * @vidconsole_drv_name: Name of video console driver (set by tests)

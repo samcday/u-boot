@@ -26,7 +26,7 @@ DECLARE_GLOBAL_DATA_PTR;
 enum {
 	LCD_MAX_WIDTH		= 1024,
 	LCD_MAX_HEIGHT		= 768,
-	LCD_MAX_LOG2_BPP	= VIDEO_BPP16,
+	LCD_MAX_BPP		= VIDEO_BPP16,
 };
 
 struct atmel_hlcdc_priv {
@@ -279,6 +279,7 @@ static int atmel_hlcdc_of_to_plat(struct udevice *dev)
 	struct atmel_hlcdc_priv *priv = dev_get_priv(dev);
 	const void *blob = gd->fdt_blob;
 	int node = dev_of_offset(dev);
+	unsigned int log2_bpp;
 
 	priv->regs = dev_read_addr_ptr(dev);
 	if (!priv->regs) {
@@ -298,11 +299,12 @@ static int atmel_hlcdc_of_to_plat(struct udevice *dev)
 	if (priv->timing.vactive.typ > LCD_MAX_HEIGHT)
 		priv->timing.vactive.typ = LCD_MAX_HEIGHT;
 
-	priv->vl_bpix = fdtdec_get_int(blob, node, "atmel,vl-bpix", 0);
-	if (!priv->vl_bpix) {
+	log2_bpp = fdtdec_get_int(blob, node, "atmel,vl-bpix", 0);
+	if (!log2_bpp) {
 		debug("%s: Failed to get bits per pixel\n", __func__);
 		return -EINVAL;
 	}
+	priv->vl_bpix = video_bpp_from_log2(log2_bpp);
 
 	priv->output_mode = fdtdec_get_int(blob, node, "atmel,output-mode", 24);
 	priv->guard_time = fdtdec_get_int(blob, node, "atmel,guard-time", 1);
@@ -314,8 +316,7 @@ static int atmel_hlcdc_bind(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 
-	uc_plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
-				(1 << LCD_MAX_LOG2_BPP) / 8;
+	uc_plat->size = LCD_MAX_WIDTH * LCD_MAX_HEIGHT * VNBYTES(LCD_MAX_BPP);
 
 	debug("%s: Frame buffer size %x\n", __func__, uc_plat->size);
 

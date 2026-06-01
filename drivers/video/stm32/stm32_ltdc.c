@@ -34,7 +34,7 @@ struct stm32_ltdc_plat {
 
 struct stm32_ltdc_priv {
 	struct display_timing timings;
-	enum video_log2_bpp l2bpp;
+	enum video_bpp bpix;
 	u32 bg_col_argb;
 	const u32 *layer_regs;
 	const u32 *pix_fmt_hw;
@@ -325,11 +325,11 @@ static const enum stm32_ltdc_pix_fmt pix_fmt_a2[NB_PF] = {
 };
 
 /* TODO add more color format support */
-static u32 stm32_ltdc_get_pixel_format(enum video_log2_bpp l2bpp)
+static u32 stm32_ltdc_get_pixel_format(enum video_bpp bpix)
 {
 	enum stm32_ltdc_pix_fmt pf;
 
-	switch (l2bpp) {
+	switch (bpix) {
 	case VIDEO_BPP16:
 		pf = PF_RGB565;
 		break;
@@ -347,12 +347,12 @@ static u32 stm32_ltdc_get_pixel_format(enum video_log2_bpp l2bpp)
 	case VIDEO_BPP4:
 	default:
 		log_warning("warning %dbpp not supported yet, %dbpp instead\n",
-			    VNBITS(l2bpp), VNBITS(VIDEO_BPP16));
+			    VNBITS(bpix), VNBITS(VIDEO_BPP16));
 		pf = PF_RGB565;
 		break;
 	}
 
-	log_debug("%d bpp -> ltdc pf %d\n", VNBITS(l2bpp), pf);
+	log_debug("%d bpp -> ltdc pf %d\n", VNBITS(bpix), pf);
 
 	return (u32)pf;
 }
@@ -470,7 +470,7 @@ static void stm32_ltdc_set_layer1(struct udevice *dev, ulong fb_addr)
 	writel(priv->bg_col_argb, regs + LTDC_L1DCCR);
 
 	/* Color frame buffer pitch in bytes & line length */
-	bpp = VNBITS(priv->l2bpp);
+	bpp = VNBITS(priv->bpix);
 	pitch_in_bytes = priv->crop_w * (bpp >> 3);
 	bus_width = 8 << ((readl(regs + LTDC_GC2R) & GC2R_BW) >> 4);
 	line_length = ((bpp >> 3) * priv->crop_w) + (bus_width >> 3) - 1;
@@ -478,7 +478,7 @@ static void stm32_ltdc_set_layer1(struct udevice *dev, ulong fb_addr)
 	clrsetbits_le32(regs + LTDC_L1CFBLR, LXCFBLR_CFBLL | LXCFBLR_CFBP, val);
 
 	/* Pixel format */
-	format = stm32_ltdc_get_pixel_format(priv->l2bpp);
+	format = stm32_ltdc_get_pixel_format(priv->bpix);
 	for (val = 0; val < NB_PF; val++)
 		if (priv->pix_fmt_hw[val] == format)
 			break;
@@ -768,7 +768,7 @@ static int stm32_ltdc_probe(struct udevice *dev)
 	}
 
 	/* TODO Below parameters are hard-coded for the moment... */
-	priv->l2bpp = VIDEO_BPP16;
+	priv->bpix = VIDEO_BPP16;
 	priv->bg_col_argb = 0xFFFFFFFF; /* white no transparency */
 	priv->crop_x = 0;
 	priv->crop_y = 0;
@@ -782,7 +782,7 @@ static int stm32_ltdc_probe(struct udevice *dev)
 
 	dev_dbg(dev, "%dx%d %dbpp frame buffer at 0x%lx\n",
 		timings->hactive.typ, timings->vactive.typ,
-		VNBITS(priv->l2bpp), uc_plat->base);
+		VNBITS(priv->bpix), uc_plat->base);
 	dev_dbg(dev, "crop %d,%d %dx%d bg 0x%08x alpha %d\n",
 		priv->crop_x, priv->crop_y, priv->crop_w, priv->crop_h,
 		priv->bg_col_argb, priv->alpha);
@@ -794,7 +794,7 @@ static int stm32_ltdc_probe(struct udevice *dev)
 
 	uc_priv->xsize = timings->hactive.typ;
 	uc_priv->ysize = timings->vactive.typ;
-	uc_priv->bpix = priv->l2bpp;
+	uc_priv->bpix = priv->bpix;
 
 	if (!plat->bridge) {
 		ret = panel_enable_backlight(plat->panel);
