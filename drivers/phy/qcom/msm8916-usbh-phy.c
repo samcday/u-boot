@@ -53,6 +53,10 @@ static int msm_phy_reset(struct phy *phy)
 	/* select ULPI phy */
 	writel(PORT_PTS_ULPI, &p->ehci->portsc);
 
+	/* Select and enable external configuration with USB PHY */
+	ulpi_write(&p->ulpi_vp, (u8 *)ULPI_MISC_A_SET,
+		   ULPI_MISC_A_VBUSVLDEXTSEL | ULPI_MISC_A_VBUSVLDEXT);
+	
 	/* Enable sess_vld */
 	setbits_le32(&p->ehci->genconfig2, GEN2_SESS_VLD_CTRL_EN);
 
