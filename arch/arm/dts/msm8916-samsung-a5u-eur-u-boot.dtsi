@@ -1,0 +1,16 @@
+/ {
+	chosen {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		framebuffer@8e000000 {
+			compatible = "simple-framebuffer";
+			reg = <0x0 0x8e000000 0x0 0x002a3000>;
+			width = <720>;
+			height = <1280>;
+			stride = <2160>;
+			format = "r8g8b8";
+		};
+	};
+};
