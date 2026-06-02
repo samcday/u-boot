@@ -1,3 +1,9 @@
+#include <config.h>
+
+#ifdef CONFIG_QCOM_LEGACY_ABOOT_IMAGE
+#include <dt-bindings/arm/qcom,ids.h>
+#endif
+
 / {
 	chosen {
 		#address-cells = <2>;
@@ -14,3 +20,37 @@
 		};
 	};
 };
+
+#ifdef CONFIG_QCOM_LEGACY_ABOOT_IMAGE
+/ {
+	binman: binman {
+		multiple-images;
+
+		u-boot-samsung-a5u {
+			filename = "u-boot-samsung-a5u.img";
+
+			android-boot-qcom-legacy {
+				page-size = <2048>;
+				kernel-addr = <0x80008000>;
+				ramdisk-addr = <0x81000000>;
+				second-addr = <0x80f00000>;
+				tags-addr = <0x80000100>;
+				cmdline = "lk2nd";
+				append-seandroid-enforce;
+
+				kernel {
+					u-boot {
+						no-expanded;
+					};
+				};
+
+				qcdt {
+					page-size = <2048>;
+					qcom,msm-id = <QCOM_ID_MSM8916 0>;
+					qcom,board-id = <0xce08ff01 1>;
+				};
+			};
+		};
+	};
+};
+#endif

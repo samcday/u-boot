@@ -26,6 +26,15 @@ config SYS_MALLOC_LEN
 config LNX_KRNL_IMG_TEXT_OFFSET_BASE
 	default 0x80000000
 
+config QCOM_LEGACY_ABOOT_IMAGE
+	bool "Build legacy Qualcomm Android aboot image"
+	select BINMAN
+	help
+	  Build a legacy Android boot image for Qualcomm aboot-based devices.
+	  The image layout and board-specific QCDT selector IDs are described by
+	  the board's binman node, typically in its U-Boot-specific devicetree
+	  include.
+
 config SYS_BOARD
 	string "Snapdragon SoCs based board"
 	help
