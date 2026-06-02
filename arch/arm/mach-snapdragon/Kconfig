@@ -1,5 +1,14 @@
 if ARCH_SNAPDRAGON
 
+config DEBUG_UART_APQ8016
+	bool "APQ8016 early debug initialization"
+	select CLK_QCOM_APQ8016
+	select CONFIG_DEBUG_UART_MSM
+	select DEBUG_UART_BOARD_INIT
+	help
+	  Ensures BLSP UART clocks+pins are setup. Useful when U-Boot is running from
+	  aboot (such as on the dragonboard410c).
+
 config SYS_SOC
 	default "snapdragon"
 
