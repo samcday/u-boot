@@ -1775,6 +1775,38 @@ u-boot-dtb.img u-boot.img u-boot.kwb u-boot.pbl u-boot-ivt.img: \
 	$(call if_changed,mkimage)
 	$(BOARD_SIZE_CHECK)
 
+qcom_samsung_a5u_qcdt_dts := $(srctree)/board/qualcomm/samsung-a5u-qcdt.dts
+qcom_samsung_a5u_qcdt_dtb := board/qualcomm/samsung-a5u-qcdt.dtb
+qcom_samsung_a5u_qcdt_cpp_flags := -nostdinc -undef \
+	-I$(srctree)/dts/upstream/include -I$(srctree)/include \
+	-x assembler-with-cpp
+
+quiet_cmd_qcom_samsung_a5u_qcdt_dtb = DTC     $@
+cmd_qcom_samsung_a5u_qcdt_dtb = mkdir -p $(dir $@); \
+	$(CPP) $(qcom_samsung_a5u_qcdt_cpp_flags) -o $@.tmp $< && \
+	$(DTC) -I dts -O dtb -b 0 -a 16 -o $@ $@.tmp && \
+	rm -f $@.tmp
+
+$(qcom_samsung_a5u_qcdt_dtb): $(qcom_samsung_a5u_qcdt_dts) scripts_dtc FORCE
+	$(call if_changed,qcom_samsung_a5u_qcdt_dtb)
+
+quiet_cmd_qcom_samsung_a5u_bootimg = A5BOOT  $@
+cmd_qcom_samsung_a5u_bootimg = $(PYTHON3) \
+	$(srctree)/tools/qcom_qcdt_bootimg.py \
+	--kernel u-boot.bin \
+	--dtb $(qcom_samsung_a5u_qcdt_dtb) \
+	--output $@ \
+	--page-size 2048 \
+	--base 0x80000000 \
+	--cmdline lk2nd \
+	--platform-id 206 \
+	--variant-id 0xce08ff01 \
+	--board-subtype 1 \
+	--append-seandroid
+
+u-boot-samsung-a5u.img: u-boot.bin $(qcom_samsung_a5u_qcdt_dtb) FORCE
+	$(call if_changed,qcom_samsung_a5u_bootimg)
+
 ifeq ($(CONFIG_SPL_LOAD_FIT_FULL),y)
 MKIMAGEFLAGS_u-boot.itb =
 else
@@ -2546,6 +2578,7 @@ CLEAN_FILES  += $(MODVERDIR) \
 CLEAN_FILES += include/autoconf.mk* include/bmp_logo.h include/bmp_logo_data.h \
 	       include/config.h include/generated/env.* drivers/video/u_boot_logo.S \
 	       tools/version.h u-boot* MLO* SPL System.map fit-dtb.blob* \
+	       board/qualcomm/samsung-a5u-qcdt.dtb \
 	       u-boot-ivt.img.log u-boot-dtb.imx.log SPL.log u-boot.imx.log \
 	       lpc32xx-* bl31.c bl31.elf bl31_*.bin image.map tispl.bin* \
 	       idbloader.img flash.bin flash.log defconfig keep-syms-lto.c \
