@@ -5598,6 +5598,38 @@ fdt         fdtmap                Extract the devicetree blob from the fdtmap
         self.assertIn("Node '/binman/renesas-rcar4-sa0': SRAM data longer than 966656 Bytes",
                       str(exc.exception))
 
+    def testQcomQcdt(self):
+        """Test that binman can produce a Qualcomm QCDT image"""
+        data = self._DoReadFile('vendor/qcom_qcdt.dts')
+        self.assertEqual(0x1000, len(data))
+        self.assertEqual(b'QCDT', data[:4])
+        self.assertEqual((2, 1), struct.unpack_from('<II', data, 4))
+        self.assertEqual((0xce, 0xce08ff01, 1, 0, 0x800, 0x800),
+                         struct.unpack_from('<IIIIII', data, 12))
+        self.assertEqual(0xd00dfeed, struct.unpack_from('>I', data, 0x800)[0])
+
+    def testAndroidBootQcomLegacy(self):
+        """Test that binman can produce a Qualcomm legacy Android image"""
+        data = self._DoReadFile('vendor/android_boot_qcom_legacy.dts')
+        self.assertEqual(b'ANDROID!', data[:8])
+
+        header = struct.unpack_from('<8s10I16s512s32s', data, 0)
+        self.assertEqual(len(U_BOOT_DATA), header[1])
+        self.assertEqual(0x80008000, header[2])
+        self.assertEqual(1, header[3])
+        self.assertEqual(0x81000000, header[4])
+        self.assertEqual(0, header[5])
+        self.assertEqual(0x80f00000, header[6])
+        self.assertEqual(0x80000100, header[7])
+        self.assertEqual(0x800, header[8])
+        self.assertEqual(0x1000, header[9])
+        self.assertEqual(0, header[10])
+        self.assertEqual(b'lk2nd', header[12].split(b'\0', 1)[0])
+
+        qcdt_offset = 0x1800
+        self.assertEqual(b'QCDT', data[qcdt_offset:qcdt_offset + 4])
+        self.assertEqual(b'SEANDROIDENFORCE', data[-16:])
+
     def testFitFdtOper(self):
         """Check handling of a specified FIT operation"""
         entry_args = {
