@@ -42,27 +42,36 @@ static void qcom_boot_cortex_a53(phys_addr_t acc_base)
 	/* Put the CPU into reset. */
 	reg_val = CORE_RST | COREPOR_RST | CLAMP | CORE_MEM_CLAMP;
 	writel(reg_val, acc_base + APCS_CPU_PWR_CTL);
+	dsb();
 
 	/* Turn on the GDHS and set the GDHS_CNT to 16 XO clock cycles */
 	writel(GDHS_EN | (0x10 << GDHS_CNT_SHIFT), acc_base + APC_PWR_GATE_CTL);
 	/* Wait for the GDHS to settle */
+	dsb();
 	udelay(2);
 
 	reg_val &= ~CORE_MEM_CLAMP;
 	writel(reg_val, acc_base + APCS_CPU_PWR_CTL);
+	dsb();
+
 	reg_val |= CORE_MEM_HS;
 	writel(reg_val, acc_base + APCS_CPU_PWR_CTL);
+	dsb();
 	udelay(2);
 
 	reg_val &= ~CLAMP;
 	writel(reg_val, acc_base + APCS_CPU_PWR_CTL);
+	dsb();
 	udelay(2);
 
 	/* Release CPU out of reset and bring it to life. */
 	reg_val &= ~(CORE_RST | COREPOR_RST);
 	writel(reg_val, acc_base + APCS_CPU_PWR_CTL);
+	dsb();
+
 	reg_val |= CORE_PWRD_UP;
 	writel(reg_val, acc_base + APCS_CPU_PWR_CTL);
+	dsb();
 }
 
 static int qcom_scm_set_boot_addr_mc(void *entry, unsigned int flags)
