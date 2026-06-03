@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2025 Linaro Ltd. */
-
-/* Much of this code was adapted from Linux kernel */
-/* Copyright (c) 2010-2015,2019 The Linux Foundation.	 All rights reserved.
+/**
+ * Much of this code was adapted from drivers/firmware/qcom/qcom_scm-smc.c
+ * in the kernel:
+ *  Copyright (c) 2010-2015,2019 The Linux Foundation.	 All rights reserved.
  */
 
 #include <compiler.h>
