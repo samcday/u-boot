@@ -3,8 +3,6 @@
  * On MSM8916 devices that lack a PSCI implementation, firing up the secondary
  * cores requires a call to TZ to set the boot address, and some poking of ACPS
  * register block.
- *
- * Copyright (c) 2025 Linaro Ltd.
  */
 
 #include <asm/io.h>
