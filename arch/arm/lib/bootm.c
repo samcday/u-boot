@@ -33,6 +33,21 @@
 #include <vxworks.h>
 #include <asm/cache.h>
 
+#define J7XELTE_BOOT_TRACE_ADDR	0x46e00010
+
+static void j7xelte_boot_trace(u32 marker, bool flush)
+{
+	if (!IS_ENABLED(CONFIG_EXYNOS_MOBILE_FASTBOOT_DEV))
+		return;
+
+	*(volatile u32 *)J7XELTE_BOOT_TRACE_ADDR = marker;
+	if (flush)
+		flush_dcache_range(ALIGN_DOWN(J7XELTE_BOOT_TRACE_ADDR,
+						 ARCH_DMA_MINALIGN),
+					 ALIGN(J7XELTE_BOOT_TRACE_ADDR + sizeof(marker),
+					       ARCH_DMA_MINALIGN));
+}
+
 #ifdef CONFIG_ARMV7_NONSEC
 #include <asm/armv7.h>
 #endif
@@ -260,13 +275,16 @@ static void boot_jump_linux(struct bootm_headers *images, int flag)
 			void *res2);
 	kernel_entry = (void (*)(void *fdt_addr, void *res0, void *res1,
 				void *res2))images->ep;
+	j7xelte_boot_trace(0x55423001, true);
 
 	debug("## Transferring control to Linux (at address %lx)...\n",
 		(ulong) kernel_entry);
 	bootstage_mark(BOOTSTAGE_ID_RUN_OS);
 
 	bootm_final(flag);
+	j7xelte_boot_trace(0x55423002, true);
 	cleanup_before_linux();
+	j7xelte_boot_trace(0x55423003, false);
 
 	if (!(flag & BOOTM_STATE_OS_FAKE_GO)) {
 #ifdef CONFIG_ARMV8_PSCI
@@ -275,6 +293,7 @@ static void boot_jump_linux(struct bootm_headers *images, int flag)
 		do_nonsec_virt_switch();
 
 		update_os_arch_secondary_cores(images->os.arch);
+		j7xelte_boot_trace(0x55423004, false);
 
 #ifdef CONFIG_ARMV8_SWITCH_TO_EL1
 		armv8_switch_to_el2((u64)images->ft_addr, 0, 0, 0,
