@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * On MSM8916 devices that lack a PSCI implementation, firing up the secondary
- * cores requires a call to TZ to set the boot address, and some poking of ACPS
- * register block.
+ * cores requires a call to TZ to set the boot address, and some poking of APCS
+ * registers.
+ *
+ * This code was mostly adapted from arch/arm/mach-qcom/platsmp.c in the kernel:
+ *  Copyright (C) 2002 ARM Ltd.
+ *  All Rights Reserved
+ *  Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+ *  Copyright (c) 2014 The Linux Foundation. All rights reserved.
+ *
+ * Some parts were adapted from, or referenced, lk2nd/smp/cortex-a.c in lk2nd:
+ *  Copyright (c) 2021-2022, Stephan Gerhold <stephan@gerhold.net>
  */
 
 #include <asm/io.h>
