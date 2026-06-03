@@ -113,20 +113,6 @@ int spin_table_boot_cpu(void *fdt, int cpu_offset)
 		return -EINVAL;
 	}
 
-	if (!boot_addr_set) {
-		debug("Setting CPU boot address to 0x%llx\n",
-		      (phys_addr_t)&spin_table_reserve_begin);
-		ret = qcom_scm_set_boot_addr_mc(&spin_table_reserve_begin,
-						QCOM_SCM_BOOT_MC_FLAG_AARCH64 |
-						QCOM_SCM_BOOT_MC_FLAG_COLDBOOT);
-		if (ret) {
-			log_err("Failed to set CPU boot addr: %d\n", ret);
-			return ret;
-		}
-
-		boot_addr_set = true;
-	}
-
 	mpidr_aff = read_mpidr() & 0xffffff;
 
 	if (reg == mpidr_aff) {
@@ -149,6 +135,21 @@ int spin_table_boot_cpu(void *fdt, int cpu_offset)
 	}
 
 	log_info("Booting CPU%d @ 0x%x\n", reg, acc_base);
+
+	if (!boot_addr_set) {
+		debug("Setting CPU boot address to 0x%llx\n",
+		      (phys_addr_t)&spin_table_reserve_begin);
+		ret = qcom_scm_set_boot_addr_mc(&spin_table_reserve_begin,
+						QCOM_SCM_BOOT_MC_FLAG_AARCH64 |
+						QCOM_SCM_BOOT_MC_FLAG_COLDBOOT);
+		if (ret) {
+			log_err("Failed to set CPU boot addr: %d\n", ret);
+			return ret;
+		}
+
+		boot_addr_set = true;
+	}
+
 	qcom_boot_cortex_a53(acc_base);
 	return 0;
 }
