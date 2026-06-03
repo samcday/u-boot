@@ -103,9 +103,6 @@ int spin_table_boot_cpu(void *fdt, int cpu_offset)
 	u32 mpidr_aff, acc_base, reg;
 	int ret;
 
-	if (fdt_node_check_compatible(fdt, 0, "qcom,msm8916"))
-		return 0;
-
 	reg = fdtdec_get_uint(fdt, cpu_offset, "reg", 0);
 
 	if (fdt_node_check_compatible(fdt, cpu_offset, "arm,cortex-a53")) {
