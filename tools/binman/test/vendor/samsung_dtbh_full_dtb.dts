@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0+
+
+/dts-v1/;
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	binman {
+		dt {
+			type = "samsung-dtbh";
+			page-size = <0x800>;
+			chip = <7870>;
+			hw-rev = <0>;
+			hw-rev-end = <255>;
+
+			dtb {
+				u-boot-dtb {
+				};
+			};
+		};
+	};
+};

@@ -4,34 +4,33 @@
 Samsung Exynos 7870 Boards
 ==========================
 
-Preparation
------------
+Building
+--------
 
-Pack the device tree blob in the QCDT format [1]_ using ``dtbTool-exynos`` [2]_
-by issuing the following commands:
-
-.. prompt:: bash $
-
-	dtbTool-exynos -o stub-dt.img .output/u-boot.dtb
-
-Finally, use ``mkbootimg`` by osm0sis [3]_ to generate the boot image:
+Build U-Boot with the S-BOOT image fragment enabled. Replace ``<dtb>`` with the
+upstream DTB path for the target device, for example
+``exynos/exynos7870-on7xelte``.
 
 .. prompt:: bash $
 
-	mkbootimg -o u-boot.img \
-		--kernel	.output/u-boot-nodtb.bin \
-		--dt		stub-dt.img
+	make O=.output exynos-mobile_defconfig sboot-exynos7870.config
+	make DEVICE_TREE=<dtb> O=.output -j$(nproc)
 
-Offsets are not provided to ``mkbootimg`` as S-BOOT ignores them.
+This produces a legacy Android boot image for S-BOOT using binman. For example,
+``exynos/exynos7870-on7xelte`` produces:
+
+.. prompt:: bash $
+
+	.output/u-boot-samsung-on7xelte.img
 
 Flashing
 --------
 If flashing for the first time, it must be done via Samsung's Download (Odin)
-mode. Heimdall [4]_ can be used for flashing, like so:
+mode. Heimdall [1]_ can be used for flashing, like so:
 
 .. prompt:: bash $
 
-	heimdall flash --BOOT u-boot.img
+	heimdall flash --BOOT .output/u-boot-samsung-on7xelte.img
 
 However, if U-Boot is already installed, you may also use its fastboot interface
 for flashing. Boot into the boot menu by holding the volume down key. Enable
@@ -39,13 +38,10 @@ fastboot mode from there, connect the device to your host, then run:
 
 .. prompt:: bash $
 
-	fastboot flash boot u-boot.img
+	fastboot flash boot .output/u-boot-samsung-on7xelte.img
 
 To flash an OS image in internal storage, fastboot is a reliable option.
 
 References
 ----------
-.. [1] https://wiki.postmarketos.org/wiki/QCDT
-.. [2] https://github.com/dsankouski/dtbtool-exynos
-.. [3] https://github.com/osm0sis/mkbootimg
-.. [4] https://git.sr.ht/~grimler/Heimdall
+.. [1] https://git.sr.ht/~grimler/Heimdall

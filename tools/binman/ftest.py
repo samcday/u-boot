@@ -5608,9 +5608,31 @@ fdt         fdtmap                Extract the devicetree blob from the fdtmap
                          struct.unpack_from('<IIIIII', data, 12))
         self.assertEqual(0xd00dfeed, struct.unpack_from('>I', data, 0x800)[0])
 
-    def testAndroidBootQcomLegacy(self):
+    def testSamsungDtbh(self):
+        """Test that binman can produce a Samsung DTBH image"""
+        data = self._DoReadFile('vendor/samsung_dtbh.dts')
+        self.assertEqual(0x1000, len(data))
+        self.assertEqual(b'DTBH', data[:4])
+        self.assertEqual((2, 1), struct.unpack_from('<II', data, 4))
+        self.assertEqual((7870, 0x50a6, 0x217584da, 0, 255, 0x800,
+                          0x800, 0x20),
+                         struct.unpack_from('<IIIIIIII', data, 12))
+        self.assertEqual(0xd00dfeed, struct.unpack_from('>I', data, 0x800)[0])
+
+    def testSamsungDtbhFullDtb(self):
+        """Test that Samsung DTBH can wrap a supplied DTB"""
+        data = self._DoReadFile('vendor/samsung_dtbh_full_dtb.dts')
+        self.assertEqual(0x1000, len(data))
+        self.assertEqual(b'DTBH', data[:4])
+        self.assertEqual((7870, 0x50a6, 0x217584da, 0, 255, 0x800,
+                          0x800, 0x20),
+                         struct.unpack_from('<IIIIIIII', data, 12))
+        self.assertEqual(U_BOOT_DTB_DATA, data[0x800:0x800 +
+                                              len(U_BOOT_DTB_DATA)])
+
+    def testAndroidBootLegacyQcom(self):
         """Test that binman can produce a Qualcomm legacy Android image"""
-        data = self._DoReadFile('vendor/android_boot_qcom_legacy.dts')
+        data = self._DoReadFile('vendor/android_boot_legacy_qcom.dts')
         self.assertEqual(b'ANDROID!', data[:8])
 
         header = struct.unpack_from('<8s10I16s512s32s', data, 0)
@@ -5629,6 +5651,19 @@ fdt         fdtmap                Extract the devicetree blob from the fdtmap
         qcdt_offset = 0x1800
         self.assertEqual(b'QCDT', data[qcdt_offset:qcdt_offset + 4])
         self.assertEqual(b'SEANDROIDENFORCE', data[-16:])
+
+    def testAndroidBootLegacySamsungDtbh(self):
+        """Test that binman can produce a Samsung legacy Android image"""
+        data = self._DoReadFile('vendor/android_boot_legacy_samsung_dtbh.dts')
+        self.assertEqual(b'ANDROID!', data[:8])
+
+        header = struct.unpack_from('<8s10I16s512s32s', data, 0)
+        self.assertEqual(len(U_BOOT_DATA), header[1])
+        self.assertEqual(0, header[3])
+        self.assertEqual(0x1000, header[9])
+
+        dtbh_offset = 0x1000
+        self.assertEqual(b'DTBH', data[dtbh_offset:dtbh_offset + 4])
 
     def testFitFdtOper(self):
         """Check handling of a specified FIT operation"""

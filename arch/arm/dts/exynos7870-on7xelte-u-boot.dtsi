@@ -3,12 +3,9 @@
  * Copyright (c) 2026 Kaustabh Chakraborty <kauschluss@disroot.org>
  */
 
-/ {
-	/* These properties are required by S-BOOT. */
-	model_info-chip = <7870>;
-	model_info-hw_rev = <0>;
-	model_info-hw_rev_end = <255>;
+#include <config.h>
 
+/ {
 	chosen {
 		#address-cells = <2>;
 		#size-cells = <1>;
@@ -39,3 +36,39 @@
 		reg = <0x0 0x80000000 0x80000000>;
 	};
 };
+
+#ifdef CONFIG_SAMSUNG_EXYNOS_LEGACY_BOOT_IMAGE
+/ {
+	binman: binman {
+		multiple-images;
+
+		u-boot-samsung-on7xelte {
+			filename = "u-boot-samsung-on7xelte.img";
+
+			android-boot-legacy {
+				page-size = <2048>;
+
+				kernel {
+					u-boot {
+						no-expanded;
+					};
+				};
+
+				dt {
+					type = "samsung-dtbh";
+					page-size = <2048>;
+					chip = <7870>;
+					hw-rev = <0>;
+					hw-rev-end = <255>;
+
+					selector {
+						compatible = "samsung,on7xelte",
+							     "samsung,exynos7870";
+						memory-base = <0x0 0x40000000>;
+					};
+				};
+			};
+		};
+	};
+};
+#endif

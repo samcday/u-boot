@@ -7,13 +7,14 @@
 	#size-cells = <1>;
 
 	binman {
-		android-boot-qcom-legacy {
+		android-boot-legacy {
 			page-size = <0x800>;
 			kernel-addr = <0x80008000>;
 			ramdisk-addr = <0x81000000>;
 			second-addr = <0x80f00000>;
 			tags-addr = <0x80000100>;
 			cmdline = "lk2nd";
+			default-ramdisk-size = <1>;
 			append-seandroid-enforce;
 
 			kernel {
@@ -22,7 +23,8 @@
 				};
 			};
 
-			qcdt {
+			dt {
+				type = "qcom-qcdt";
 				page-size = <0x800>;
 				qcom,msm-id = <0xce 0>;
 				qcom,board-id = <0xce08ff01 1>;

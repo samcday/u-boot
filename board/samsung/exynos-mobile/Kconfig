@@ -15,4 +15,13 @@ config SYS_CONFIG_NAME
 config SYS_VENDOR
 	default "samsung"
 
+config SAMSUNG_EXYNOS_LEGACY_BOOT_IMAGE
+	bool "Build legacy Samsung Exynos Android boot image"
+	select BINMAN
+	help
+	  Build a legacy Android boot image for Samsung Exynos S-BOOT devices.
+	  The image layout and board-specific DTBH selector values are described by
+	  the board's binman node, typically in its U-Boot-specific devicetree
+	  include.
+
 endif # TARGET_EXYNOS_MOBILE
