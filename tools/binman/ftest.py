@@ -5658,11 +5658,55 @@ fdt         fdtmap                Extract the devicetree blob from the fdtmap
             digest.update(struct.pack('<I', len(payload)))
         self.assertEqual(digest.digest() + b'\0' * 12, header[13])
 
+    def testAndroidBootQcdt(self):
+        """Test that binman can produce a legacy Android boot image with QCDT"""
+        data = self._DoReadFile('vendor/android_boot_qcdt.dts')
+        header = struct.unpack_from('<8s10I16s512s32s', data, 0)
+
+        qcdt_offset = 0x1800
+        qcdt_size = 0x1000
+        qcdt = data[qcdt_offset:qcdt_offset + qcdt_size]
+
+        self.assertEqual(0x2810, len(data))
+        self.assertEqual(b'ANDROID!', header[0])
+        self.assertEqual(len(U_BOOT_DATA), header[1])
+        self.assertEqual(0x80008000, header[2])
+        self.assertEqual(1, header[3])
+        self.assertEqual(0x81000000, header[4])
+        self.assertEqual(0, header[5])
+        self.assertEqual(0x80f00000, header[6])
+        self.assertEqual(0x80000100, header[7])
+        self.assertEqual(0x800, header[8])
+        self.assertEqual(qcdt_size, header[9])
+        self.assertEqual(0, header[10])
+        self.assertEqual(b'foo', header[12].split(b'\0', 1)[0])
+
+        digest = hashlib.sha1()
+        for payload in (U_BOOT_DATA, b'\0', b'', qcdt):
+            digest.update(payload)
+            digest.update(struct.pack('<I', len(payload)))
+        self.assertEqual(digest.digest() + b'\0' * 12, header[13])
+
         self.assertEqual(U_BOOT_DATA, data[0x800:0x800 + len(U_BOOT_DATA)])
         self.assertEqual(b'\0', data[0x1000:0x1001])
         self.assertNotIn(b'QCDT', data)
         self.assertNotIn(b'DTBH', data)
         self.assertEqual(b'SEANDROIDENFORCE', data[-16:])
+
+        self.assertEqual(b'QCDT', qcdt[:4])
+        self.assertEqual((2, 1), struct.unpack_from('<II', qcdt, 4))
+        self.assertEqual((0xce, 0xce08ff01, 1, 0, 0x800, 0x800),
+                         struct.unpack_from('<IIIIII', qcdt, 12))
+        self.assertEqual(0xd00dfeed,
+                         struct.unpack_from('>I', data, qcdt_offset + 0x800)[0])
+        self.assertEqual(b'SEANDROIDENFORCE', data[-16:])
+
+    def testAndroidBootQcdtBadMsmId(self):
+        """Test that QCDT rejects invalid msm-id properties"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('vendor/android_boot_qcdt_bad_msm_id.dts')
+        self.assertIn("Property 'qcom,msm-id' must contain exactly 2 cells",
+                      str(exc.exception))
 
     def testFitFdtOper(self):
         """Check handling of a specified FIT operation"""

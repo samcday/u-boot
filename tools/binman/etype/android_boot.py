@@ -26,6 +26,10 @@ BOOT_IMAGE_HEADER_V2 = (BOOT_IMAGE_HEADER_V0 +
                         '{}sIQIIQ'.format(BOOT_EXTRA_ARGS_SIZE))
 BOOT_IMAGE_HEADER_V2_SIZE = struct.calcsize(BOOT_IMAGE_HEADER_V2)
 
+QCDT_MAGIC = b'QCDT'
+QCDT_VERSION = 2
+SEANDROIDENFORCE = b'SEANDROIDENFORCE'
+
 def _align_up(value, align):
     return (value + align - 1) & ~(align - 1)
 
@@ -42,6 +46,9 @@ class Entry_android_boot(Entry_section):
     A kernel payload, optional ramdisk payload can be supplied. A DTB payload
     can also be provided when header_version == v2.
 
+    Vendor-specific payloads are also supported. These are non-standard
+    v0 images with a special DT container format appended.
+
     Properties / Entry arguments:
         - header-version: Android boot image header version, must be 0 or 2
         - page-size: Image page size, defaults to 2048
@@ -53,11 +60,14 @@ class Entry_android_boot(Entry_section):
         - os-version: Encoded Android OS version and patch level, defaults to 0
         - boot-name: Android boot image board name
         - cmdline: Android boot command line
+        - append-seandroid-enforce: Append Samsung SEANDROIDENFORCE trailer,
+          used by header version 0 only
 
     This entry uses the following subnodes:
         - kernel: section containing the executable payload
         - dtb: section containing the DTB payload, used by header version 2 only
         - ramdisk: optional section containing a ramdisk payload
+        - vendor-dt: legacy vendor DT payload, used by header version 0 only
 
     Example::
         A v2 abootimg with control FDT placed in the DTB section:
@@ -104,6 +114,35 @@ class Entry_android_boot(Entry_section):
                 };
             };
         };
+
+        A legacy QCDT abootimg, the kind msm8916 bootloaders expect:
+
+        android-boot {
+            base = <0x80000000>;
+            append-seandroid-enforce;
+
+            kernel {
+                u-boot {
+                    no-expanded;
+                };
+            };
+
+            ramdisk {
+                fill {
+                    size = <1>;
+                };
+            };
+
+            vendor-dt {
+                qcdt {
+                    dtb-0 {
+                        compatible = "samsung,a5u-eur", "qcom,msm8916";
+                        qcom,msm-id = <206 0>;
+                        qcom,board-id = <0xce08ff01 1>;
+                    };
+                };
+            };
+        };
     """
 
     def ReadNode(self):
@@ -118,6 +157,9 @@ class Entry_android_boot(Entry_section):
         self.os_version = fdt_util.GetInt(self._node, 'os-version', 0)
         self.boot_name = fdt_util.GetString(self._node, 'boot-name', '')
         self.cmdline = fdt_util.GetString(self._node, 'cmdline', '')
+        self.append_seandroid = fdt_util.GetBool(self._node,
+                                                 'append-seandroid-enforce')
+        self.vendor_dt_node = self._node.FindNode('vendor-dt')
 
         if self.header_version not in (0, 2):
             self.Raise('Only Android boot image header versions 0 and 2 are '
@@ -132,18 +174,27 @@ class Entry_android_boot(Entry_section):
                 self.Raise('page-size must fit the Android boot image header')
             if 'dtb' in self._entries:
                 self.Raise("Subnode 'dtb' requires header-version 2")
+            if self.vendor_dt_node and self.os_version:
+                self.Raise("os_version not allowed when vendor-dt is in use")
         else:
             # v2
             if self.page_size < BOOT_IMAGE_HEADER_V2_SIZE:
                 self.Raise('page-size must fit the Android boot image header')
             if 'dtb' not in self._entries:
                 self.Raise("Missing required subnode 'dtb'")
+            if self.append_seandroid:
+                self.Raise("Property 'append-seandroid-enforce' requires "
+                           "header-version 0")
+            if self.vendor_dt_node:
+                self.Raise("Subnode 'vendor-dt' requires header-version 0")
 
     def ReadEntries(self):
         for node in self._node.subnodes:
             if self.IsSpecialSubnode(node):
                 continue
-            if node.name not in ('kernel', 'dtb'):
+            if node.name == 'vendor-dt':
+                continue
+            if node.name not in ('kernel', 'ramdisk', 'dtb'):
                 self.Raise("Unexpected subnode '%s'" % node.name)
 
             entry = Entry.Create(self, node, etype='section',
@@ -168,6 +219,25 @@ class Entry_android_boot(Entry_section):
             value = value << 32 | fdt_util.fdt32_to_cpu(cell)
 
         return value
+
+    @staticmethod
+    def _GetU32Cells(node, propname):
+        prop = node.props.get(propname)
+        if not prop:
+            raise ValueError("Node '%s': Missing required property '%s'" %
+                             (node.path, propname))
+
+        values = prop.value if isinstance(prop.value, list) else [prop.value]
+        return [fdt_util.fdt32_to_cpu(value) for value in values]
+
+    @classmethod
+    def _GetU32Tuple(cls, node, propname, width):
+        values = cls._GetU32Cells(node, propname)
+        if len(values) != width:
+            raise ValueError("Node '%s': Property '%s' must contain exactly "
+                             "%d cells" % (node.path, propname, width))
+
+        return tuple(values)
 
     def _GetAddr(self, offset, name, size=32):
         addr = self.base + offset
@@ -244,11 +314,62 @@ class Entry_android_boot(Entry_section):
         fdt.pack()
         return bytes(fdt.as_bytearray())
 
+    def _BuildQcdt(self, node):
+        if not node.subnodes:
+            raise ValueError("Node '%s': Missing required DTB subnodes" %
+                             node.path)
+
+        page_size = fdt_util.GetInt(node, 'page-size', self.page_size)
+        if page_size <= 0 or page_size & (page_size - 1):
+            raise ValueError("Node '%s': page-size must be a power of two" %
+                             node.path)
+
+        dtbs = []
+        for subnode in node.subnodes:
+            msm_id = self._GetU32Tuple(subnode, 'qcom,msm-id', 2)
+            board_id = self._GetU32Tuple(subnode, 'qcom,board-id', 2)
+            dtbs.append((subnode, msm_id, board_id, self._BuildDtb(node)))
+
+        dtb_offset = _align_up(12 + len(dtbs) * 24, page_size)
+        records = []
+        payloads = bytearray()
+        for _node, msm_id, board_id, dtb in dtbs:
+            dtb_size = _align_up(len(dtb), page_size)
+            records.append((*msm_id, *board_id, dtb_offset, dtb_size))
+            payloads += _pad(dtb, page_size)
+            dtb_offset += dtb_size
+
+        qcdt = bytearray(struct.pack('<4sII', QCDT_MAGIC, QCDT_VERSION,
+                                     len(records)))
+        for platform_id, soc_rev, variant_id, subtype, offset, size in records:
+            qcdt += struct.pack('<IIIIII', platform_id, variant_id, subtype,
+                                soc_rev, offset, size)
+
+        return _pad(qcdt, page_size) + bytes(payloads)
+
+    def _BuildVendorDt(self, required):
+        if not self.vendor_dt_node or len(self.vendor_dt_node.subnodes) == 0:
+            return b''
+
+        if len(self.vendor_dt_node.subnodes) != 1:
+            self.Raise("Subnode 'vendor-dt' must contain exactly one format "
+                       "subnode")
+
+        node = self.vendor_dt_node.subnodes[0]
+        if node.name not in ('qcdt', 'dtbh'):
+            self.Raise("Subnode 'vendor-dt' must contain a 'qcdt' or 'dtbh' "
+                       "subnode")
+
+        if node.name == 'qcdt':
+            return self._BuildQcdt(node)
+
+        return b''
+
     def _BuildV0SectionData(self, required):
         kernel = self._GetEntryData('kernel', required)
         if kernel is None:
             return None
-
+        vendor_dt = self._BuildVendorDt(required)
         ramdisk = self._GetOptionalEntryData('ramdisk', required)
         if ramdisk is None:
             return None
@@ -257,7 +378,7 @@ class Entry_android_boot(Entry_section):
                                    BOOT_NAME_SIZE)
         cmdline = self._CheckFit('cmdline', self.cmdline.encode('ascii'),
                                  BOOT_ARGS_SIZE)
-        image_id = self._BootId(kernel, ramdisk)
+        image_id = self._BootId(kernel, ramdisk, vendor_dt)
 
         header = struct.pack(BOOT_IMAGE_HEADER_V0,
                              BOOT_MAGIC,
@@ -269,7 +390,7 @@ class Entry_android_boot(Entry_section):
                              0, # second_offset
                              self._GetAddr(self.tags_offset, 'tags'),
                              self.page_size,
-                             self.header_version,
+                             len(vendor_dt),
                              self.os_version,
                              boot_name,
                              cmdline,
@@ -279,6 +400,9 @@ class Entry_android_boot(Entry_section):
         image += _pad(header, self.page_size)
         image += _pad(kernel, self.page_size)
         image += _pad(ramdisk, self.page_size)
+        image += _pad(vendor_dt, self.page_size)
+        if self.append_seandroid:
+            image += SEANDROIDENFORCE
 
         return bytes(image)
 
