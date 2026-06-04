@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: GPL-2.0
+
+#include <dt-bindings/arm/qcom,ids.h>
+
+/ {
+	binman {
+		filename = "u-boot-samsung-a5u-eur.img";
+
+		android-boot {
+			header-version = <0>;
+			page-size = <2048>;
+			base = <0x80000000>;
+			append-seandroid-enforce;
+
+			kernel {
+				u-boot {
+					no-expanded;
+				};
+			};
+
+			ramdisk {
+				fill {
+					size = <1>;
+				};
+			};
+
+			vendor-dt {
+				qcdt {
+					dtb-0 {
+						qcom,msm-id = <QCOM_ID_MSM8916 0>;
+						qcom,board-id = <0xce08ff01 1>;
+
+						u-boot-dtb {};
+					};
+				};
+			};
+		};
+	};
+};
