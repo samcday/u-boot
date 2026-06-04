@@ -5677,6 +5677,86 @@ fdt         fdtmap                Extract the devicetree blob from the fdtmap
         self.assertIn("Property 'qcom,msm-id' must contain exactly 2 cells",
                       str(exc.exception))
 
+    def testAndroidBootDtbh(self):
+        """Test that binman can produce a legacy Android boot image with DTBH"""
+        data, dtb_data, _map, _dtb = self._DoReadFileDtb(
+            'vendor/android_boot_dtbh.dts', use_real_dtb=True)
+        header = struct.unpack_from('<8s10I16s512s32s', data, 0)
+
+        dtbh_offset = 0x1000
+        dtb_size = tools.align(len(dtb_data), 0x800)
+        dtbh_size = 0x800 + dtb_size
+        dtbh = data[dtbh_offset:dtbh_offset + dtbh_size]
+
+        self.assertEqual(0x1000 + dtbh_size + 16, len(data))
+        self.assertEqual(b'ANDROID!', header[0])
+        self.assertEqual(len(U_BOOT_NODTB_DATA), header[1])
+        self.assertEqual(0x10008000, header[2])
+        self.assertEqual(0, header[3])
+        self.assertEqual(0x11000000, header[4])
+        self.assertEqual(0, header[5])
+        self.assertEqual(0x10f00000, header[6])
+        self.assertEqual(0x10000100, header[7])
+        self.assertEqual(0x800, header[8])
+        self.assertEqual(dtbh_size, header[9])
+        self.assertEqual(0, header[10])
+        self.assertEqual(b'SRPOL10A000RU', header[11].split(b'\0', 1)[0])
+
+        digest = hashlib.sha1()
+        for payload in (U_BOOT_NODTB_DATA, b'', b'', dtbh):
+            digest.update(payload)
+            digest.update(struct.pack('<I', len(payload)))
+        self.assertEqual(digest.digest() + b'\0' * 12, header[13])
+
+        self.assertEqual(U_BOOT_NODTB_DATA,
+                         data[0x800:0x800 + len(U_BOOT_NODTB_DATA)])
+        self.assertEqual(b'DTBH', dtbh[:4])
+        self.assertEqual((2, 1), struct.unpack_from('<II', dtbh, 4))
+        self.assertEqual((7870, 0x50a6, 0x217584da, 6, 6, 0x800,
+                          dtb_size, 0x20),
+                         struct.unpack_from('<8I', dtbh, 12))
+        self.assertEqual(0xd00dfeed,
+                         struct.unpack_from('>I', dtbh, 0x800)[0])
+        self.assertEqual(dtb_data, dtbh[0x800:0x800 + len(dtb_data)])
+        self.assertEqual(b'SEANDROIDENFORCE', data[-16:])
+
+    def testAndroidBootDtbhSynthetic(self):
+        """Test a legacy Android boot image with a synthetic DTBH DTB"""
+        data = self._DoReadFile('vendor/android_boot_dtbh_synthetic.dts')
+        header = struct.unpack_from('<8s10I16s512s32s', data, 0)
+
+        dtbh_offset = 0x1000
+        dtbh_size = 0x1000
+        dtbh = data[dtbh_offset:dtbh_offset + dtbh_size]
+
+        self.assertEqual(0x2010, len(data))
+        self.assertEqual(b'ANDROID!', header[0])
+        self.assertEqual(len(U_BOOT_DATA), header[1])
+        self.assertEqual(0x10008000, header[2])
+        self.assertEqual(0, header[3])
+        self.assertEqual(0x11000000, header[4])
+        self.assertEqual(0x800, header[8])
+        self.assertEqual(dtbh_size, header[9])
+        self.assertEqual(b'SRPOL10A000RU', header[11].split(b'\0', 1)[0])
+
+        self.assertEqual(U_BOOT_DATA, data[0x800:0x800 + len(U_BOOT_DATA)])
+        self.assertEqual(b'DTBH', dtbh[:4])
+        self.assertEqual((2, 1), struct.unpack_from('<II', dtbh, 4))
+        self.assertEqual((7870, 0x50a6, 0x217584da, 6, 6, 0x800,
+                          0x800, 0x20),
+                         struct.unpack_from('<8I', dtbh, 12))
+        self.assertEqual(0xd00dfeed,
+                         struct.unpack_from('>I', dtbh, 0x800)[0])
+        self.assertEqual(b'SEANDROIDENFORCE', data[-16:])
+
+    def testAndroidBootDtbhBadModelInfo(self):
+        """Test that DTBH rejects invalid model_info properties"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFileDtb('vendor/android_boot_dtbh_bad_model_info.dts',
+                                use_real_dtb=True)
+        self.assertIn("DTB root property 'model_info-chip' must contain "
+                      "exactly 1 cell", str(exc.exception))
+
     def testFitFdtOper(self):
         """Check handling of a specified FIT operation"""
         entry_args = {

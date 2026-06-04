@@ -19,6 +19,11 @@ BOOT_IMAGE_HEADER_V0_SIZE = 608
 BOOT_IMAGE_HEADER_V2_SIZE = 1660
 QCDT_MAGIC = b'QCDT'
 QCDT_VERSION = 2
+DTBH_MAGIC = b'DTBH'
+DTBH_VERSION = 2
+DTBH_PLATFORM_CODE = 0x50a6
+DTBH_SUBTYPE_CODE = 0x217584da
+DTBH_SPACE = 0x20
 SEANDROIDENFORCE = b'SEANDROIDENFORCE'
 
 
@@ -35,7 +40,7 @@ class Entry_android_boot(Entry_section):
 
     This creates an Android boot image. Header version 2 is supported with a
     kernel payload and a DTB payload. Legacy header version 0 is supported with
-    a kernel payload, optional ramdisk payload and a Qualcomm QCDT vendor DT
+    a kernel payload, optional ramdisk payload and a QCDT or DTBH vendor DT
     payload appended after the regular Android boot payloads.
 
     Properties / Entry arguments:
@@ -118,6 +123,49 @@ class Entry_android_boot(Entry_section):
                 };
             };
         };
+
+        A DTBH vendor DT can use a real DTB entry::
+
+        android-boot {
+            header-version = <0>;
+
+            kernel {
+                u-boot-nodtb {
+                };
+            };
+
+            vendor-dt {
+                dtbh {
+                    dtb-0 {
+                        u-boot-dtb {
+                        };
+                    };
+                };
+            };
+        };
+
+        Or each DTBH entry can describe a skinny DTB directly::
+
+        android-boot {
+            header-version = <0>;
+
+            kernel {
+                u-boot {
+                    no-expanded;
+                };
+            };
+
+            vendor-dt {
+                dtbh {
+                    dtb-0 {
+                        compatible = "samsung,j7xelte", "samsung,exynos7870";
+                        model_info-chip = <7870>;
+                        model_info-hw_rev = <6>;
+                        model_info-hw_rev_end = <6>;
+                    };
+                };
+            };
+        };
     """
 
     def ReadNode(self):
@@ -167,6 +215,7 @@ class Entry_android_boot(Entry_section):
             if self.IsSpecialSubnode(node):
                 continue
             if node.name == 'vendor-dt':
+                self._ReadVendorDtEntries(node)
                 continue
             if node.name not in ('kernel', 'ramdisk', 'dtb'):
                 self.Raise("Unexpected subnode '%s'" % node.name)
@@ -177,6 +226,26 @@ class Entry_android_boot(Entry_section):
             entry.ReadNode()
             entry.SetPrefix(self._name_prefix)
             self._entries[node.name] = entry
+
+    @staticmethod
+    def _VendorDtEntryName(node):
+        return '_vendor_dt_%s' % node.name
+
+    def _ReadVendorDtEntries(self, vendor_dt_node):
+        dtbh_node = vendor_dt_node.FindNode('dtbh')
+        if not dtbh_node:
+            return
+
+        for node in dtbh_node.subnodes:
+            if self._IsSyntheticDtbhNode(node):
+                continue
+
+            entry = Entry.Create(self, node, etype='section',
+                                 expanded=self.GetImage().use_expanded,
+                                 missing_etype=self.GetImage().missing_etype)
+            entry.ReadNode()
+            entry.SetPrefix(self._name_prefix)
+            self._entries[self._VendorDtEntryName(node)] = entry
 
     def _GetIntCells(self, propname, default):
         prop = self._node.props.get(propname)
@@ -281,17 +350,52 @@ class Entry_android_boot(Entry_section):
 
         with fsw.add_node(''):
             _AddNode(node)
+            if not node.FindNode('chosen'):
+                with fsw.add_node('chosen'):
+                    pass
         fdt = fsw.as_fdt()
         fdt.pack()
         return bytes(fdt.as_bytearray())
 
-    def _BuildQcdt(self):
-        qcdt_node = self.vendor_dt_node.FindNode('qcdt')
-        if not qcdt_node:
-            self.Raise("Subnode 'vendor-dt' must contain a 'qcdt' subnode")
+    @staticmethod
+    def _IsSyntheticDtbhNode(node):
+        return 'model_info-chip' in node.props
+
+    @classmethod
+    def _GetNodeU32(cls, node, propname):
+        return cls._GetU32Tuple(node, propname, 1)[0]
+
+    @staticmethod
+    def _GetDtbRootU32(node, data, propname):
+        import libfdt
+
+        try:
+            fdt = libfdt.Fdt(data)
+            root = fdt.path_offset('/')
+            prop = fdt.getprop(root, propname)
+        except libfdt.FdtException as exc:
+            raise ValueError("Node '%s': Missing required DTB root property "
+                             "'%s'" % (node.path, propname)) from exc
+
+        if len(prop) != 4:
+            raise ValueError("Node '%s': DTB root property '%s' must contain "
+                             "exactly 1 cell" % (node.path, propname))
+
+        return fdt_util.fdt32_to_cpu(prop)
+
+    def _GetVendorDtNode(self):
         if len(self.vendor_dt_node.subnodes) != 1:
             self.Raise("Subnode 'vendor-dt' must contain exactly one format "
                        "subnode")
+
+        node = self.vendor_dt_node.subnodes[0]
+        if node.name not in ('qcdt', 'dtbh'):
+            self.Raise("Subnode 'vendor-dt' must contain a 'qcdt' or 'dtbh' "
+                       "subnode")
+
+        return node
+
+    def _BuildQcdt(self, qcdt_node):
         if not qcdt_node.subnodes:
             raise ValueError("Node '%s': Missing required DTB subnodes" %
                              qcdt_node.path)
@@ -324,12 +428,71 @@ class Entry_android_boot(Entry_section):
 
         return _pad(qcdt, page_size) + bytes(payloads)
 
+    def _BuildDtbh(self, dtbh_node, required):
+        if not dtbh_node.subnodes:
+            raise ValueError("Node '%s': Missing required DTB subnodes" %
+                             dtbh_node.path)
+
+        page_size = fdt_util.GetInt(dtbh_node, 'page-size', self.page_size)
+        if page_size <= 0 or page_size & (page_size - 1):
+            raise ValueError("Node '%s': page-size must be a power of two" %
+                             dtbh_node.path)
+
+        platform = fdt_util.GetInt(dtbh_node, 'platform', DTBH_PLATFORM_CODE)
+        subtype = fdt_util.GetInt(dtbh_node, 'subtype', DTBH_SUBTYPE_CODE)
+
+        dtbs = []
+        for node in dtbh_node.subnodes:
+            if self._IsSyntheticDtbhNode(node):
+                data = self._BuildDtb(node)
+                chip = self._GetNodeU32(node, 'model_info-chip')
+                hw_rev = self._GetNodeU32(node, 'model_info-hw_rev')
+                hw_rev_end = self._GetNodeU32(node, 'model_info-hw_rev_end')
+            else:
+                entry = self._entries[self._VendorDtEntryName(node)]
+                data = entry.GetData(required)
+                if data is None and not required:
+                    return None
+
+                chip = self._GetDtbRootU32(node, data, 'model_info-chip')
+                hw_rev = self._GetDtbRootU32(node, data, 'model_info-hw_rev')
+                hw_rev_end = self._GetDtbRootU32(node, data,
+                                                 'model_info-hw_rev_end')
+            dtbs.append((chip, platform, subtype, hw_rev, hw_rev_end, data))
+
+        header_size = _align_up(12 + len(dtbs) * 32 + 4, page_size)
+        dtb_offset = header_size
+        records = []
+        payloads = bytearray()
+        for chip, platform, subtype, hw_rev, hw_rev_end, dtb in dtbs:
+            dtb_size = _align_up(len(dtb), page_size)
+            records.append((chip, platform, subtype, hw_rev, hw_rev_end,
+                            dtb_offset, dtb_size, DTBH_SPACE))
+            payloads += _pad(dtb, page_size)
+            dtb_offset += dtb_size
+
+        dtbh = bytearray(struct.pack('<4sII', DTBH_MAGIC, DTBH_VERSION,
+                                     len(records)))
+        for record in records:
+            dtbh += struct.pack('<8I', *record)
+
+        return _pad(dtbh, page_size) + bytes(payloads)
+
+    def _BuildVendorDt(self, required):
+        node = self._GetVendorDtNode()
+        if node.name == 'qcdt':
+            return self._BuildQcdt(node)
+
+        return self._BuildDtbh(node, required)
+
     def _BuildLegacySectionData(self, required):
         kernel = self._GetEntryData('kernel', required)
         if kernel is None:
             return None
 
-        vendor_dt = self._BuildQcdt()
+        vendor_dt = self._BuildVendorDt(required)
+        if vendor_dt is None:
+            return None
         ramdisk = self._GetOptionalEntryData('ramdisk', required)
         if ramdisk is None:
             return None
