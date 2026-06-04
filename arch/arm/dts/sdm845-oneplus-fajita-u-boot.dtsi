@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0
+
+#include <config.h>
+
+#ifdef CONFIG_BINMAN
+/ {
+	binman {
+		filename = "u-boot-oneplus-fajita.img";
+
+		android-boot {
+			header-version = <2>;
+			page-size = <4096>;
+			base = <0x00000000>;
+			kernel-offset = <0x00008000>;
+			dtb-offset = <0x01f00000>;
+
+			kernel {
+				u-boot-nodtb {};
+			};
+
+			dtb {
+				u-boot-dtb {};
+			};
+		};
+	};
+};
+#endif
