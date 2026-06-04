@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: GPL-2.0+
+
+/dts-v1/;
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	binman {
+		android-boot {
+			header-version = <2>;
+			page-size = <0x800>;
+			base = <0x80000000>;
+			kernel-offset = <0x00008000>;
+			ramdisk-offset = <0x01000000>;
+			second-offset = <0x00f00000>;
+			tags-offset = <0x00000100>;
+			dtb-offset = <0x01f00000>;
+			boot-name = "test-board";
+			cmdline = "test cmdline";
+
+			kernel {
+				u-boot {
+					no-expanded;
+				};
+			};
+
+			dtb {
+				u-boot-dtb {
+				};
+			};
+		};
+	};
+};
