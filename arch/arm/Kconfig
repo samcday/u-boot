@@ -92,7 +92,7 @@ config SPL_USE_SEPARATE_FAULT_HANDLERS
 	  on them separately.
 
 config LINUX_KERNEL_IMAGE_HEADER
-	depends on ARM64
+	depends on ARM64 || CPU_V7A
 	bool
 	help
 	  Place a Linux kernel image header at the start of the U-Boot binary.
@@ -1149,7 +1149,7 @@ config ARCH_SNAPDRAGON
 	select BOARD_LATE_INIT
 	select OF_BOARD
 	select SAVE_PREV_BL_FDT_ADDR if !ENABLE_ARM_SOC_BOOT0_HOOK
-	select LINUX_KERNEL_IMAGE_HEADER if ARM64 && !ENABLE_ARM_SOC_BOOT0_HOOK
+	select LINUX_KERNEL_IMAGE_HEADER if !ENABLE_ARM_SOC_BOOT0_HOOK
 	select SYSRESET
 	select SYSRESET_PSCI if ARM64
 	select ANDROID_BOOT_IMAGE_IGNORE_BLOB_ADDR if ARM64

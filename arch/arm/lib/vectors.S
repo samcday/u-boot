@@ -14,6 +14,8 @@
 
 #include <config.h>
 
+#define LINUX_ARM_ZIMAGE_MAGIC	0x016f2818
+
 /*
  * A macro to allow insertion of an ARM exception vector either
  * for the non-boot0 case or by a boot0-header.
@@ -87,6 +89,18 @@ _start:
 	.word	CFG_SYS_DV_NOR_BOOT_CFG
 #endif
 	ARM_VECTORS
+#ifdef CONFIG_LINUX_KERNEL_IMAGE_HEADER
+#if CONFIG_IS_ENABLED(SYS_NO_VECTOR_TABLE)
+	.rept	7
+	b	reset
+	.endr
+#endif
+	/* ARM Linux zImage header: code[9], magic, start, end */
+	b	reset
+	.word	LINUX_ARM_ZIMAGE_MAGIC
+	.word	0
+	.word	_image_binary_end - _start
+#endif
 #endif /* !defined(CONFIG_ENABLE_ARM_SOC_BOOT0_HOOK) */
 
 #if !CONFIG_IS_ENABLED(SYS_NO_VECTOR_TABLE)
