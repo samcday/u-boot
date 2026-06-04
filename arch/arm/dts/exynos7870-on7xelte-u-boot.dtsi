@@ -4,11 +4,6 @@
  */
 
 / {
-	/* These properties are required by S-BOOT. */
-	model_info-chip = <7870>;
-	model_info-hw_rev = <0>;
-	model_info-hw_rev_end = <255>;
-
 	chosen {
 		#address-cells = <2>;
 		#size-cells = <1>;
@@ -24,18 +19,49 @@
 		};
 	};
 
-	/*
-	 * S-BOOT will populate the memory nodes stated below. Existing
-	 * values redefine the safe memory requirements as stated in upstream
-	 * device tree, in separate nodes for each bank.
-	 */
-	memory@40000000 {
-		device_type = "memory";
-		reg = <0x0 0x40000000 0x3e400000>;
-	};
+	binman: binman {
+		multiple-images;
+		u-boot-samsung-on7xelte {
+			filename = "u-boot-samsung-on7xelte.img";
+			android-boot {
+				header-version = <0>;
+				page-size = <2048>;
+				kernel {
+					u-boot {
+						no-expanded;
+					};
+				};
+				vendor-dt {
+					dtbh {
+						platform = <0x50a6>;
+						subtype = <0x217584da>;
+						dtb-0 {
+							#address-cells = <2>;
+							#size-cells = <1>;
+							model_info-chip = <7870>;
+							model_info-hw_rev = <0>;
+							model_info-hw_rev_end = <255>;
+							model_info-platform = "android";
+							model_info-subtype = "samsung";
 
-	memory@80000000 {
-		device_type = "memory";
-		reg = <0x0 0x80000000 0x80000000>;
+							/*
+							 * S-BOOT will populate the memory nodes stated below. Existing
+							 * values redefine the safe memory requirements as stated in upstream
+							 * device tree, in separate nodes for each bank.
+							 */
+							memory@40000000 {
+								device_type = "memory";
+								reg = <0x0 0x40000000 0x3e400000>;
+							};
+
+							memory@80000000 {
+								device_type = "memory";
+								reg = <0x0 0x80000000 0x80000000>;
+							};
+						};
+					};
+				};
+			};
+		};
 	};
 };
