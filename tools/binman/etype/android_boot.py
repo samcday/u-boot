@@ -142,6 +142,26 @@ class Entry_android_boot(Entry_section):
                 };
             };
         };
+
+        A legacy DTBH abootimg, the kind some Samsung bootloaders expect:
+
+        android-boot {
+            header-version = <0>;
+
+            kernel {
+                u-boot-nodtb {
+                };
+            };
+
+            vendor-dt {
+                dtbh {
+                    dtb-0 {
+                        u-boot-dtb {
+                        };
+                    };
+                };
+            };
+        };
     """
 
     def ReadNode(self):
@@ -281,30 +301,6 @@ class Entry_android_boot(Entry_section):
             return None
 
         return data
-
-    @staticmethod
-    def _BuildDtb(node):
-        import libfdt
-
-        fsw = libfdt.FdtSw()
-        fsw.INC_SIZE = 65536
-        fsw.finish_reservemap()
-
-        def _AddNode(in_node):
-            for pname, prop in in_node.props.items():
-                fsw.property(pname, prop.bytes)
-            for subnode in in_node.subnodes:
-                with fsw.add_node(subnode.name):
-                    _AddNode(subnode)
-
-        with fsw.add_node(''):
-            _AddNode(node)
-            if not node.FindNode('chosen'):
-                with fsw.add_node('chosen'):
-                    pass
-        fdt = fsw.as_fdt()
-        fdt.pack()
-        return bytes(fdt.as_bytearray())
 
     def _BuildVendorDt(self, required):
         if not self.vendor_dt_node:
