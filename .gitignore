@@ -76,6 +76,7 @@ fit-dtb.blob*
 /Test*
 /capsule*.efi-capsule
 /capsule*.map
+/comp.*
 /keep-syms-lto.*
 /*imx8mimage*
 /*imx8mcst*
