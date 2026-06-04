@@ -748,6 +748,7 @@ config TARGET_BCMNS3
 
 config ARCH_EXYNOS
 	bool "Samsung EXYNOS"
+	select BINMAN
 	select DM
 	select DM_GPIO
 	select DM_I2C
