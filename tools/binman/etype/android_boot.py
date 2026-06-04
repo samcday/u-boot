@@ -40,8 +40,8 @@ class Entry_android_boot(Entry_section):
 
     This creates an Android boot image. Header version 2 is supported with a
     kernel payload and a DTB payload. Legacy header version 0 is supported with
-    a kernel payload, optional ramdisk payload and a QCDT or DTBH vendor DT
-    payload appended after the regular Android boot payloads.
+    a kernel payload, optional ramdisk payload and optional QCDT or DTBH vendor
+    DT payload appended after the regular Android boot payloads.
 
     Properties / Entry arguments:
         - header-version: Android boot image header version, must be 0 or 2
@@ -65,7 +65,8 @@ class Entry_android_boot(Entry_section):
         - kernel: section containing the executable payload
         - ramdisk: optional section containing a ramdisk payload
         - dtb: section containing the DTB payload, used by header version 2 only
-        - vendor-dt: legacy vendor DT payload, used by header version 0 only
+        - vendor-dt: optional legacy vendor DT payload, used by header version
+          0 only
 
     Example::
 
@@ -87,6 +88,25 @@ class Entry_android_boot(Entry_section):
 
             dtb {
                 u-boot-dtb {
+                };
+            };
+        };
+
+        android-boot {
+            header-version = <0>;
+            page-size = <2048>;
+            base = <0x80200000>;
+            cmdline = "foo";
+
+            kernel {
+                u-boot {
+                    no-expanded;
+                };
+            };
+
+            ramdisk {
+                fill {
+                    size = <1>;
                 };
             };
         };
@@ -205,8 +225,6 @@ class Entry_android_boot(Entry_section):
         if self.header_version == 2 and self.append_seandroid:
             self.Raise("Property 'append-seandroid-enforce' requires "
                        "header-version 0")
-        if self.header_version == 0 and not self.vendor_dt_node:
-            self.Raise("Missing required subnode 'vendor-dt'")
         if self.header_version == 0 and 'dtb' in self._entries:
             self.Raise("Subnode 'dtb' requires header-version 2")
 
@@ -479,6 +497,9 @@ class Entry_android_boot(Entry_section):
         return _pad(dtbh, page_size) + bytes(payloads)
 
     def _BuildVendorDt(self, required):
+        if not self.vendor_dt_node:
+            return b''
+
         node = self._GetVendorDtNode()
         if node.name == 'qcdt':
             return self._BuildQcdt(node)
@@ -502,7 +523,10 @@ class Entry_android_boot(Entry_section):
                                    BOOT_NAME_SIZE)
         cmdline = self._CheckFit('cmdline', self.cmdline.encode('ascii'),
                                  BOOT_ARGS_SIZE)
-        image_id = self._BootId(kernel, ramdisk, second, vendor_dt)
+        payloads = (kernel, ramdisk, second)
+        if vendor_dt:
+            payloads += (vendor_dt,)
+        image_id = self._BootId(*payloads)
 
         header = struct.pack('<8s10I16s512s32s', BOOT_MAGIC,
                              len(kernel),

@@ -5633,6 +5633,37 @@ fdt         fdtmap                Extract the devicetree blob from the fdtmap
         self.assertEqual(U_BOOT_DTB_DATA,
                          data[0x1000:0x1000 + len(U_BOOT_DTB_DATA)])
 
+    def testAndroidBootV0(self):
+        """Test that binman can produce a plain legacy Android boot image"""
+        data = self._DoReadFile('vendor/android_boot_v0.dts')
+        header = struct.unpack_from('<8s10I16s512s32s', data, 0)
+
+        self.assertEqual(0x1810, len(data))
+        self.assertEqual(b'ANDROID!', header[0])
+        self.assertEqual(len(U_BOOT_DATA), header[1])
+        self.assertEqual(0x80208000, header[2])
+        self.assertEqual(1, header[3])
+        self.assertEqual(0x81200000, header[4])
+        self.assertEqual(0, header[5])
+        self.assertEqual(0x81100000, header[6])
+        self.assertEqual(0x80200100, header[7])
+        self.assertEqual(0x800, header[8])
+        self.assertEqual(0, header[9])
+        self.assertEqual(0, header[10])
+        self.assertEqual(b'foo', header[12].split(b'\0', 1)[0])
+
+        digest = hashlib.sha1()
+        for payload in (U_BOOT_DATA, b'\0', b''):
+            digest.update(payload)
+            digest.update(struct.pack('<I', len(payload)))
+        self.assertEqual(digest.digest() + b'\0' * 12, header[13])
+
+        self.assertEqual(U_BOOT_DATA, data[0x800:0x800 + len(U_BOOT_DATA)])
+        self.assertEqual(b'\0', data[0x1000:0x1001])
+        self.assertNotIn(b'QCDT', data)
+        self.assertNotIn(b'DTBH', data)
+        self.assertEqual(b'SEANDROIDENFORCE', data[-16:])
+
     def testAndroidBootQcdt(self):
         """Test that binman can produce a legacy Android boot image with QCDT"""
         data = self._DoReadFile('vendor/android_boot_qcdt.dts')
