@@ -32,6 +32,10 @@ class Entry_android_boot(Entry_section):
     A kernel payload, optional ramdisk payload can be supplied. A DTB payload
     can also be provided when header_version == v2.
 
+    Vendor-specific payloads are also supported. These are non-standard
+    v0 images with a special DT container format appended. The vendor-dt
+    subnode is a section, so it can contain another entry such as qcdt or dtbh.
+
     Properties / Entry arguments:
         - header-version: Android boot image header version, must be 0 or 2,
           defaults to 0
@@ -49,6 +53,8 @@ class Entry_android_boot(Entry_section):
         - kernel: section containing the executable payload
         - dtb: section containing the DTB payload, used by header version 2 only
         - ramdisk: optional section containing a ramdisk payload
+        - vendor-dt: optional section containing a legacy vendor DT payload,
+          used by header version 0 only
 
     Example::
         A v2 abootimg with control FDT placed in the DTB section:
@@ -111,6 +117,7 @@ class Entry_android_boot(Entry_section):
         self.os_version = fdt_util.GetInt(self._node, 'os-version', 0)
         self.boot_name = fdt_util.GetString(self._node, 'boot-name', '')
         self.cmdline = fdt_util.GetString(self._node, 'cmdline', '')
+        self.vendor_dt_node = self._node.FindNode('vendor-dt')
 
         if self.header_version not in (0, 2):
             self.Raise('Only Android boot image header versions 0 and 2 are '
@@ -131,9 +138,15 @@ class Entry_android_boot(Entry_section):
                 self.Raise('page-size must fit the Android boot image header')
             if 'dtb' not in self._entries:
                 self.Raise("Missing required subnode 'dtb'")
+            if self.vendor_dt_node:
+                self.Raise("Subnode 'vendor-dt' requires header-version 0")
 
     def ReadEntries(self):
         for node in self._node.subnodes:
+            if node.name == 'vendor-dt':
+                self._ReadVendorDtEntries(node)
+                continue
+
             if node.name not in ('kernel', 'ramdisk', 'dtb'):
                 self.Raise("Unexpected subnode '%s'" % node.name)
 
@@ -143,6 +156,14 @@ class Entry_android_boot(Entry_section):
             entry.ReadNode()
             entry.SetPrefix(self._name_prefix)
             self._entries[node.name] = entry
+
+    def _ReadVendorDtEntries(self, vendor_dt_node):
+        entry = Entry.Create(self, vendor_dt_node, etype='section',
+                             expanded=self.GetImage().use_expanded,
+                             missing_etype=self.GetImage().missing_etype)
+        entry.ReadNode()
+        entry.SetPrefix(self._name_prefix)
+        self._entries[vendor_dt_node.name] = entry
 
     def _GetIntCells(self, propname, default):
         prop = self._node.props.get(propname)
@@ -199,8 +220,10 @@ class Entry_android_boot(Entry_section):
 
     def _BuildV0SectionData(self, required):
         kernel = self._GetEntryData('kernel', required)
+        vendor_dt = self._GetEntryData('vendor-dt', required, b'')
         ramdisk = self._GetEntryData('ramdisk', required, b'')
-        if not required and (kernel is None or ramdisk is None):
+        if not required and (kernel is None or vendor_dt is None or
+                             ramdisk is None):
             return None
 
         boot_name = self._CheckFit('boot-name', self.boot_name.encode('ascii'),
@@ -208,7 +231,18 @@ class Entry_android_boot(Entry_section):
         cmdline = self._CheckFit('cmdline', self.cmdline.encode('ascii'),
                                  BOOT_ARGS_SIZE)
 
-        image_id = self._BootId(kernel, ramdisk, b'')
+        if self.vendor_dt_node:
+            image_id = self._BootId(kernel, ramdisk, b'', vendor_dt)
+        else:
+            image_id = self._BootId(kernel, ramdisk, b'')
+
+        overloaded_header_version = self.header_version
+        if self.vendor_dt_node:
+            # vendor DTs overload the header_version field to store the length
+            # of the appended payload. Hopefully AOSP abootimg never progresses
+            # to v8192-ish or we might have some real specificity problems on
+            # our hands.
+            overloaded_header_version = len(vendor_dt)
 
         header = struct.pack(BOOT_IMAGE_HEADER_V0,
                              BOOT_MAGIC,
@@ -220,7 +254,7 @@ class Entry_android_boot(Entry_section):
                              0, # second_offset
                              self._GetAddr(self.tags_offset, 'tags'),
                              self.page_size,
-                             self.header_version,
+                             overloaded_header_version,
                              self.os_version,
                              boot_name,
                              cmdline,
@@ -231,6 +265,7 @@ class Entry_android_boot(Entry_section):
         image += tools.pad_align(header, self.page_size)
         image += tools.pad_align(kernel, self.page_size)
         image += tools.pad_align(ramdisk, self.page_size)
+        image += tools.pad_align(vendor_dt, self.page_size)
 
         return bytes(image)
 
@@ -238,7 +273,8 @@ class Entry_android_boot(Entry_section):
         kernel = self._GetEntryData('kernel', required)
         dtb = self._GetEntryData('dtb', required)
         ramdisk = self._GetEntryData('ramdisk', required, b'')
-        if not required and (kernel is None or dtb is None):
+        if not required and (kernel is None or dtb is None or
+                             ramdisk is None):
             return None
 
         boot_name = self._CheckFit('boot-name', self.boot_name.encode('ascii'),
