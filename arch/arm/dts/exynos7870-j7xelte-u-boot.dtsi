@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: GPL-2.0
+
+/ {
+	/* These properties are required by S-BOOT. */
+	model_info-chip = <7870>;
+	model_info-hw_rev = <6>;
+	model_info-hw_rev_end = <6>;
+
+	binman {
+		filename = "u-boot-samsung-j7xelte.img";
+		android-boot {
+			kernel {
+				u-boot-nodtb {};
+			};
+			vendor-dt {
+				dtbh {
+					dtb-0 {
+						u-boot-dtb { };
+					};
+				};
+			};
+		};
+	};
+};
