@@ -5673,6 +5673,12 @@ fdt         fdtmap                Extract the devicetree blob from the fdtmap
                                              vendor_dt), header[13])
         self.assertEqual(vendor_dt, data[0x1800:0x1805])
 
+    def testAndroidBootSeAndroidEnforce(self):
+        """Test that binman appends SEANDROIDENFORCE"""
+        data = self._DoReadFile('vendor/android_boot_seandroidenforce.dts')
+
+        self.assertEqual(b'SEANDROIDENFORCE', data[-16:])
+
     def testAndroidBootQcdt(self):
         """Test that binman can produce a QCDT container"""
         data, dtb_data, _map, _dtb = self._DoReadFileDtb(
