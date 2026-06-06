@@ -77,8 +77,8 @@ void clk_enable_vote_clk(phys_addr_t base, const struct vote_clk *vclk)
 int qcom_gate_clk_en(const struct msm_clk_priv *priv, unsigned long id)
 {
 	if (id >= priv->data->num_clks || priv->data->clks[id].reg == 0) {
-		log_err("gcc@%#08llx: unknown clock ID %lu!\n",
-			priv->base, id);
+		log_err("gcc@%p: unknown clock ID %lu!\n",
+			(void *)priv->base, id);
 		return -ENOENT;
 	}
 
@@ -115,8 +115,8 @@ void clk_bcr_update(phys_addr_t apps_cmd_rcgr)
 			break;
 		udelay(1);
 	}
-	WARN(count == 50000, "WARNING: RCG @ %#llx [%#010x] stuck at off\n",
-	     apps_cmd_rcgr, readl(apps_cmd_rcgr));
+	WARN(count == 50000, "WARNING: RCG @ %p [%#010x] stuck at off\n",
+	     (void *)apps_cmd_rcgr, readl(apps_cmd_rcgr));
 }
 
 #define CFG_SRC_DIV_MASK	0b11111

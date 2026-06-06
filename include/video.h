@@ -55,11 +55,22 @@ enum video_log2_bpp {
 	VIDEO_BPP8,
 	VIDEO_BPP16,
 	VIDEO_BPP32,
+	VIDEO_BPP24,
 };
 
 /* Convert enum video_log2_bpp to bytes and bits */
-#define VNBYTES(bpix)	((1 << (bpix)) / 8)
-#define VNBITS(bpix)	(1 << (bpix))
+static inline uint video_bpp(enum video_log2_bpp bpix)
+{
+	return bpix == VIDEO_BPP24 ? 24 : 1 << bpix;
+}
+
+static inline uint video_bpp_bytes(enum video_log2_bpp bpix)
+{
+	return video_bpp(bpix) / 8;
+}
+
+#define VNBYTES(bpix)	video_bpp_bytes(bpix)
+#define VNBITS(bpix)	video_bpp(bpix)
 
 enum video_format {
 	VIDEO_UNKNOWN,

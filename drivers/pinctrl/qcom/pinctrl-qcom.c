@@ -30,7 +30,7 @@ struct msm_pinctrl_priv {
 };
 
 #define GPIO_CONFIG_REG(priv, x) \
-	(qcom_pin_offset((priv)->data->pin_data.pin_offsets, x))
+	(qcom_pin_offset(&(priv)->data->pin_data, x))
 
 #define GPIO_IN_OUT_REG(priv, x) \
 	(GPIO_CONFIG_REG(priv, x) + 0x4)

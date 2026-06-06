@@ -48,10 +48,13 @@ static int fdt_simplefb_configure_node(void *blob, int off)
 	}
 
 	switch (bpix) {
-	case 4: /* VIDEO_BPP16 */
+	case VIDEO_BPP16:
 		name = "r5g6b5";
 		break;
-	case 5: /* VIDEO_BPP32 */
+	case VIDEO_BPP24:
+		name = "r8g8b8";
+		break;
+	case VIDEO_BPP32:
 		name = "a8r8g8b8";
 		break;
 	default:
@@ -59,7 +62,7 @@ static int fdt_simplefb_configure_node(void *blob, int off)
 	}
 
 	return fdt_setup_simplefb_node(blob, off, fb_base, xsize, ysize,
-				       xsize * (1 << bpix) / 8, name);
+				       xsize * VNBYTES(bpix), name);
 }
 
 int fdt_simplefb_add_node(void *blob)

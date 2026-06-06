@@ -27,16 +27,20 @@ struct msm_special_pin_data {
 struct msm_pin_data {
 	int pin_count;
 	const unsigned int *pin_offsets;
+	u32 gpio_base;
+	/* defaults to 0x1000 */
+	u32 gpio_stride;
 	unsigned int special_pins_start;
 	const struct msm_special_pin_data *special_pins_data;
 };
 
-static inline u32 qcom_pin_offset(const unsigned int *offs, unsigned int selector)
+static inline u32 qcom_pin_offset(const struct msm_pin_data *pindata, unsigned int selector)
 {
-	u32 out = (selector * 0x1000);
+	u32 stride = pindata->gpio_stride ? pindata->gpio_stride : 0x1000;
+	u32 out = pindata->gpio_base + selector * stride;
 
-	if (offs)
-		return out + offs[selector];
+	if (pindata->pin_offsets)
+		return out + pindata->pin_offsets[selector];
 
 	return out;
 }
