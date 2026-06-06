@@ -8,11 +8,18 @@
 #include <linux/libfdt.h>
 #include <asm/spin_table.h>
 
+int __weak spin_table_boot_cpu(void *fdt, int cpu_offset)
+{
+	return 0;
+}
+
 int spin_table_update_dt(void *fdt)
 {
 	int cpus_offset, offset;
 	const char *prop;
+	const void *release_addr;
 	int ret;
+	int found_cpus = 0;
 	unsigned long rsv_addr = (unsigned long)&spin_table_reserve_begin;
 	unsigned long rsv_size = &spin_table_reserve_end -
 						&spin_table_reserve_begin;
@@ -45,11 +52,24 @@ int spin_table_update_dt(void *fdt)
 		if (!prop || strcmp(prop, "cpu"))
 			continue;
 
+		release_addr = fdt_getprop(fdt, offset, "cpu-release-addr", NULL);
+		if (release_addr)
+			continue;
+
+		found_cpus = 1;
+
+		ret = spin_table_boot_cpu(fdt, offset);
+		if (ret)
+			return ret;
+
 		ret = fdt_setprop_u64(fdt, offset, "cpu-release-addr",
 				(unsigned long)&spin_table_cpu_release_addr);
 		if (ret)
 			return -ENOSPC;
 	}
+
+	if (!found_cpus)
+		return 0;
 
 	ret = fdt_add_mem_rsv(fdt, rsv_addr, rsv_size);
 	if (ret)
