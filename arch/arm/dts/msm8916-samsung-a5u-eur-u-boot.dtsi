@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0
+
+#include <dt-bindings/arm/qcom,ids.h>
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	ranges;
+
+	chosen {
+		framebuffer@8e000000 {
+			compatible = "simple-framebuffer";
+			memory-region = <&cont_splash_mem>;
+			width = <720>;
+			height = <1280>;
+			stride = <2160>;
+			format = "r8g8b8";
+		};
+	};
+
+	reserved-memory {
+		cont_splash_mem: memory@8e000000 {
+			reg = <0x0 0x8e000000 0x0 0x002a3000>;
+			no-map;
+		};
+	};
+};
