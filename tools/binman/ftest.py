@@ -5598,6 +5598,133 @@ fdt         fdtmap                Extract the devicetree blob from the fdtmap
         self.assertIn("Node '/binman/renesas-rcar4-sa0': SRAM data longer than 966656 Bytes",
                       str(exc.exception))
 
+    @staticmethod
+    def _AndroidBootId(*payloads):
+        digest = hashlib.sha1()
+        for data in payloads:
+            digest.update(data)
+            digest.update(struct.pack('<I', len(data)))
+
+        return digest.digest() + b'\0' * 12
+
+    def testAndroidBootV0(self):
+        """Test that binman can produce a plain legacy Android boot image"""
+        data = self._DoReadFile('vendor/android_boot_v0.dts')
+        header = struct.unpack_from('<8s10I16s512s32s', data, 0)
+
+        self.assertEqual(b'ANDROID!', header[0])
+        self.assertEqual(len(U_BOOT_DATA), header[1])
+        self.assertEqual(0x80208000, header[2])
+        self.assertEqual(1, header[3])
+        self.assertEqual(0x81200000, header[4])
+        self.assertEqual(0, header[5])
+        self.assertEqual(0, header[6])
+        self.assertEqual(0x80200100, header[7])
+        self.assertEqual(0x800, header[8])
+        self.assertEqual(0, header[9])
+        self.assertEqual(0, header[10])
+        self.assertEqual(b'foo', header[12].split(b'\0', 1)[0])
+        self.assertEqual(self._AndroidBootId(U_BOOT_DATA, b'\0', b''),
+                         header[13])
+
+    def testAndroidBootV2(self):
+        """Test that binman can produce an Android boot image"""
+        data = self._DoReadFile('vendor/android_boot_v2.dts')
+        header = struct.unpack_from('<8s10I16s512s32s1024sIQIIQ', data, 0)
+
+        self.assertEqual(b'ANDROID!', header[0])
+        self.assertEqual(len(U_BOOT_DATA), header[1])
+        self.assertEqual(0x80008000, header[2])
+        self.assertEqual(0, header[3])
+        self.assertEqual(0x81000000, header[4])
+        self.assertEqual(0, header[5])
+        self.assertEqual(0, header[6])
+        self.assertEqual(0x80000100, header[7])
+        self.assertEqual(0x800, header[8])
+        self.assertEqual(2, header[9])
+        self.assertEqual(0, header[10])
+        self.assertEqual(b'test-board', header[11].split(b'\0', 1)[0])
+        self.assertEqual(0, header[15])
+        self.assertEqual(0, header[16])
+        self.assertEqual(1660, header[17])
+        self.assertEqual(len(U_BOOT_DTB_DATA), header[18])
+        self.assertEqual(0x81f00000, header[19])
+        self.assertEqual(self._AndroidBootId(U_BOOT_DATA, b'', b'', b'',
+                                             U_BOOT_DTB_DATA), header[13])
+
+        cmdline = header[12].split(b'\0', 1)[0]
+        extra_cmdline = header[14].split(b'\0', 1)[0]
+        self.assertEqual(b"tests.. ", cmdline[-8:])
+        self.assertEqual(512, len(cmdline))
+        self.assertEqual(b'sup', extra_cmdline)
+
+        self.assertEqual(U_BOOT_DATA, data[0x800:0x800 + len(U_BOOT_DATA)])
+        self.assertEqual(U_BOOT_DTB_DATA,
+                         data[0x1000:0x1000 + len(U_BOOT_DTB_DATA)])
+
+    def testAndroidBootVendorDt(self):
+        """Test that android-boot can embed an arbitrary vendor-dt section"""
+        data = self._DoReadFile('vendor/android_boot_vendor_dt.dts')
+        header = struct.unpack_from('<8s10I16s512s32s', data, 0)
+        vendor_dt = b'howdy'
+        self.assertEqual(len(vendor_dt), header[9])
+        self.assertEqual(0, header[10])
+        self.assertEqual(self._AndroidBootId(U_BOOT_DATA, b'\0', b'',
+                                             vendor_dt), header[13])
+        self.assertEqual(vendor_dt, data[0x1800:0x1805])
+
+    def testAndroidBootSeAndroidEnforce(self):
+        """Test that binman appends SEANDROIDENFORCE"""
+        data = self._DoReadFile('vendor/android_boot_seandroidenforce.dts')
+
+        self.assertEqual(b'SEANDROIDENFORCE', data[-16:])
+
+    def testAndroidBootQcdt(self):
+        """Test that binman can produce a QCDT container"""
+        data, dtb_data, _map, _dtb = self._DoReadFileDtb(
+            'vendor/qcdt.dts', use_real_dtb=True)
+
+        dtb_size = tools.align(len(dtb_data), 0x800)
+
+        self.assertEqual(b'QCDT', data[:4])
+        self.assertEqual((2, 1), struct.unpack_from('<II', data, 4))
+        self.assertEqual((0xce, 0xce08ff01, 1, 0, 0x800, dtb_size),
+                         struct.unpack_from('<IIIIII', data, 12))
+        self.assertEqual(0xd00dfeed,
+                         struct.unpack_from('>I', data, 0x800)[0])
+        self.assertEqual(dtb_data, data[0x800:0x800 + len(dtb_data)])
+
+    def testAndroidBootQcdtBadMsmId(self):
+        """Test that QCDT rejects invalid msm-id properties"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('vendor/qcdt_bad_msm_id.dts')
+        self.assertIn("Property 'qcom,msm-id' must contain exactly 2 cells",
+                      str(exc.exception))
+
+    def testAndroidBootDtbh(self):
+        """Test that binman can produce a DTBH container"""
+        data, dtb_data, _map, _dtb = self._DoReadFileDtb(
+            'vendor/dtbh.dts', use_real_dtb=True)
+
+        dtb_size = tools.align(len(dtb_data), 0x800)
+
+        self.assertEqual(b'DTBH', data[:4])
+        self.assertEqual((2, 1), struct.unpack_from('<II', data, 4))
+        self.assertEqual((7870, 0x50a6, 0x217584da, 6, 6, 0x800,
+                          dtb_size, 0x20),
+                         struct.unpack_from('<8I', data, 12))
+        self.assertEqual(0xd00dfeed,
+                         struct.unpack_from('>I', data, 0x800)[0])
+        self.assertEqual(dtb_data, data[0x800:0x800 + len(dtb_data)])
+
+    def testAndroidBootDtbhBadModelInfo(self):
+        """Test that DTBH rejects invalid model_info properties"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFileDtb('vendor/dtbh_bad_model_info.dts',
+                                use_real_dtb=True)
+        self.assertIn("DTB root property 'model_info-chip' must contain "
+                      "exactly 1 cell", str(exc.exception))
+
     def testFitFdtOper(self):
         """Check handling of a specified FIT operation"""
         entry_args = {
