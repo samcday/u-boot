@@ -22,9 +22,17 @@ SANITIZERS	+= -fsanitize=fuzzer
 endif
 KBUILD_CFLAGS	+= $(SANITIZERS)
 
+SANDBOX_DYNSYM_SCRIPT := \
+	$(abspath $(srctree)/arch/sandbox/u-boot-dynsym.lds)
+SANDBOX_DYNSYM_LDFLAGS := -Wl,--version-script=$(SANDBOX_DYNSYM_SCRIPT)
+
+u-boot: $(SANDBOX_DYNSYM_SCRIPT)
+spl/u-boot-spl: $(SANDBOX_DYNSYM_SCRIPT)
+
 cmd_u-boot__ = \
 	touch $(u-boot-main) ; \
-	$(CC) -o $@ -Wl,-T u-boot.lds $(u-boot-init) \
+	$(CC) -o $@ -Wl,-T u-boot.lds $(SANDBOX_DYNSYM_LDFLAGS) \
+	$(u-boot-init) \
 	$(KBUILD_LDFLAGS:%=-Wl,%) \
 	$(SANITIZERS) \
 	$(LTO_FINAL_LDFLAGS) \
@@ -37,6 +45,7 @@ cmd_u-boot__ = \
 cmd_u-boot-spl = (cd $(obj) && \
 	touch $(patsubst $(obj)/%,%,$(u-boot-spl-main)) && \
 	$(CC) -o $(SPL_BIN) -Wl,-T u-boot-spl.lds \
+	$(SANDBOX_DYNSYM_LDFLAGS) \
 	$(KBUILD_LDFLAGS:%=-Wl,%) \
 	$(SANITIZERS) \
 	$(LTO_FINAL_LDFLAGS) \
