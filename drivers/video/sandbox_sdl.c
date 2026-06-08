@@ -112,18 +112,26 @@ static int sandbox_sdl_bind(struct udevice *dev)
 {
 	struct sandbox_sdl_plat *plat = dev_get_plat(dev);
 	enum video_bpp bpix;
-	uint log2_bpp;
-	int ret = 0;
+	uint bpp;
 
 	plat->xres = dev_read_u32_default(dev, "xres", LCD_MAX_WIDTH);
 	plat->yres = dev_read_u32_default(dev, "yres", LCD_MAX_HEIGHT);
-	log2_bpp = dev_read_u32_default(dev, "log2-depth", 4);
-	bpix = video_bpp_from_log2(log2_bpp);
+	bpp = dev_read_u32_default(dev, "bpp", VIDEO_BPP16);
+	switch (bpp) {
+	case VIDEO_BPP8:
+	case VIDEO_BPP16:
+	case VIDEO_BPP24:
+	case VIDEO_BPP32:
+		bpix = (enum video_bpp)bpp;
+		break;
+	default:
+		return log_msg_ret("bpp", -EINVAL);
+	}
 	plat->rot = dev_read_u32_default(dev, "rotate", 0);
 
 	set_bpp(dev, bpix);
 
-	return ret;
+	return 0;
 }
 
 static const struct udevice_id sandbox_sdl_ids[] = {
