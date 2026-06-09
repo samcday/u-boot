@@ -959,7 +959,7 @@ def run_tests(names, processes):
     """Run all the test we have for the fdt model
 
     Args:
-        names (list of str): List of test names provided. Only the first is used
+        names (list of str): List of test names provided
         processes (int): Number of processes to use (None means as many as there
             are CPUs on the system. This must be set to 1 when running under
             the python3-coverage tool
@@ -967,9 +967,8 @@ def run_tests(names, processes):
     Returns:
         int: Return code, 0 on success
     """
-    test_name = names[0] if names else None
     result = test_util.run_test_suites(
-        'test_fdt', False, False, False, False, processes, test_name, None,
+        'test_fdt', False, False, False, False, processes, names or None, None,
         [TestFdt, TestNode, TestProp, TestFdtUtil])
 
     return (0 if result.wasSuccessful() else 1)

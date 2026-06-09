@@ -41,7 +41,8 @@ def run_patman():
         from patman import test_checkpatch
         from patman import test_cseries
 
-        to_run = args.testname if args.testname not in [None, 'test'] else None
+        to_run = ([args.testname] if args.testname not in [None, 'test']
+                  else None)
         result = test_util.run_test_suites(
             'patman', False, args.verbose, args.no_capture,
             args.test_preserve_dirs, None, to_run, None,

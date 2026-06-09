@@ -54,12 +54,12 @@ def RunTests(debug, verbosity, processes, test_preserve_dirs, args, toolpath):
         verbosity: Verbosity level to use
         test_preserve_dirs: True to preserve the input directory used by tests
             so that it can be examined afterwards (only useful for debugging
-            tests). If a single test is selected (in args[0]) it also preserves
-            the output directory for this test. Both directories are displayed
-            on the command line.
+            tests). If any tests are selected it also preserves their output
+            directories. The preserved directories are displayed on the command
+            line.
         processes: Number of processes to use to run tests (None=same as #CPUs)
-        args: List of positional args provided to binman. This can hold a test
-            name to execute (as in 'binman test testSections', for example)
+        args: List of positional args provided to binman. This can hold test
+            names to execute (as in 'binman test testSections', for example)
         toolpath: List of paths to use for tools
     """
     from binman import bintool_test
@@ -72,13 +72,13 @@ def RunTests(debug, verbosity, processes, test_preserve_dirs, args, toolpath):
     from binman import image_test
     import doctest
 
-    test_name = args and args[0] or None
+    test_names = args or None
 
     # Run the entry tests first ,since these need to be the first to import the
     # 'entry' module.
     result = test_util.run_test_suites(
         'binman', debug, verbosity, False, test_preserve_dirs, processes,
-        test_name, toolpath,
+        test_names, toolpath,
         [bintool_test.TestBintool, entry_test.TestEntry, ftest.TestFunctional,
          fdt_test.TestFdt, elf_test.TestElf, image_test.TestImage,
          cbfs_util_test.TestCbfs, fip_util_test.TestFip])

@@ -46,20 +46,20 @@ def run_tests(processes, args):
 
     Args:
         processes: Number of processes to use to run tests (None=same as #CPUs)
-        args: List of positional args provided to dtoc. This can hold a test
-            name to execute (as in 'dtoc -t test_empty_file', for example)
+        args: List of positional args provided to dtoc. This can hold test
+            names to execute (as in 'dtoc -t test_empty_file', for example)
     """
     from dtoc import test_src_scan
     from dtoc import test_dtoc
 
     sys.argv = [sys.argv[0]]
-    test_name = args.files and args.files[0] or None
+    test_names = args.files or None
 
     test_dtoc.setup()
 
     result = test_util.run_test_suites(
         toolname='dtoc', debug=True, verbosity=1, no_capture=False,
-        test_preserve_dirs=False, processes=processes, test_name=test_name,
+        test_preserve_dirs=False, processes=processes, test_names=test_names,
         toolpath=[],
         class_and_module_list=[test_dtoc.TestDtoc,test_src_scan.TestSrcScan])
 
