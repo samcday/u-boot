@@ -189,6 +189,10 @@ def align(pos, align):
         pos = (pos + mask) & ~mask
     return pos
 
+def pad_align(data, alignment):
+    """Pad bytes with zeros up to the given alignment"""
+    return data + get_bytes(0, align(len(data), alignment) - len(data))
+
 def not_power_of_two(num):
     return num and (num & (num - 1))
 
