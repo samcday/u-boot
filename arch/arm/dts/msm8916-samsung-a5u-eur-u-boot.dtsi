@@ -4,10 +4,6 @@
 #include <dt-bindings/arm/qcom,ids.h>
 
 / {
-	#address-cells = <2>;
-	#size-cells = <2>;
-	ranges;
-
 	chosen {
 		framebuffer@8e000000 {
 			compatible = "simple-framebuffer";
@@ -20,6 +16,10 @@
 	};
 
 	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
 		cont_splash_mem: memory@8e000000 {
 			reg = <0x0 0x8e000000 0x0 0x002a3000>;
 			no-map;
