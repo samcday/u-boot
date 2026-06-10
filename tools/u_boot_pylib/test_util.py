@@ -4,6 +4,7 @@
 #
 
 import doctest
+import fnmatch
 import glob
 import multiprocessing
 import os
@@ -157,7 +158,7 @@ def run_test_suites(toolname, debug, verbosity, no_capture, test_preserve_dirs,
             the output directory for this test. Both directories are displayed
             on the command line.
         processes: Number of processes to use to run tests (None=same as #CPUs)
-        test_name: Name of test to run, or None for all
+        test_name: Name of test, or list of test names, to run; None for all
         toolpath: List of paths to use for tools
         class_and_module_list: List of test classes (type class) and module
            names (type str) to run
@@ -182,12 +183,21 @@ def run_test_suites(toolname, debug, verbosity, no_capture, test_preserve_dirs,
         resultclass=FullTextTestResult,
     )
 
-    if use_concurrent and processes != 1 and not test_name:
+    if isinstance(test_name, str):
+        test_names = [test_name]
+    else:
+        test_names = list(test_name or [])
+
+    def _match_name(name):
+        return any(fnmatch.fnmatchcase(name, pattern) for pattern in test_names)
+
+    if use_concurrent and processes != 1 and not test_names:
         suite = ConcurrentTestSuite(suite,
                 fork_for_tests(processes or multiprocessing.cpu_count()))
 
     for module in class_and_module_list:
-        if isinstance(module, str) and (not test_name or test_name == module):
+        if (isinstance(module, str) and
+                (not test_names or _match_name(module))):
             suite.addTests(doctest.DocTestSuite(module))
 
     for module in class_and_module_list:
@@ -197,15 +207,16 @@ def run_test_suites(toolname, debug, verbosity, no_capture, test_preserve_dirs,
         if hasattr(module, 'setup_test_args'):
             setup_test_args = getattr(module, 'setup_test_args')
             setup_test_args(preserve_indir=test_preserve_dirs,
-                preserve_outdirs=test_preserve_dirs and test_name is not None,
+                preserve_outdirs=test_preserve_dirs and bool(test_names),
                 toolpath=toolpath, verbosity=verbosity, no_capture=no_capture)
-        if test_name:
+        if test_names:
             # Since Python v3.5 If an ImportError or AttributeError occurs
             # while traversing a name then a synthetic test that raises that
             # error when run will be returned. Check that the requested test
             # exists, otherwise these errors are included in the results.
-            if test_name in loader.getTestCaseNames(module):
-                suite.addTests(loader.loadTestsFromName(test_name, module))
+            for name in loader.getTestCaseNames(module):
+                if _match_name(name):
+                    suite.addTests(loader.loadTestsFromName(name, module))
         else:
             suite.addTests(loader.loadTestsFromTestCase(module))
 

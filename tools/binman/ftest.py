@@ -5598,6 +5598,371 @@ fdt         fdtmap                Extract the devicetree blob from the fdtmap
         self.assertIn("Node '/binman/renesas-rcar4-sa0': SRAM data longer than 966656 Bytes",
                       str(exc.exception))
 
+    @staticmethod
+    def _AndroidBootId(*payloads):
+        digest = hashlib.sha1()
+        for data in payloads:
+            digest.update(data)
+            digest.update(struct.pack('<I', len(data)))
+
+        return digest.digest() + b'\0' * 12
+
+    def testAndroidBootUnsupportedVersion(self):
+        """Test that binman rejects versions other than v0 and v2"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_unsupported_version.dts')
+        self.assertIn("Only Android boot image header versions 0 and 2 are supported",
+                      str(exc.exception))
+
+    def testAndroidBootInvalidPageSize(self):
+        """Test that binman rejects page sizes that are not a power of 2"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_invalid_pagesize.dts')
+        self.assertIn("page-size must be a power of two",
+                      str(exc.exception))
+
+    def testAndroidBootV0PageSizeTooSmol(self):
+        """Test that binman rejects page sizes that are smaller than header size"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_v0_pagesize_too_smol.dts')
+        self.assertIn("page-size must fit the Android boot image header",
+                      str(exc.exception))
+
+    def testAndroidBootMissingKernel(self):
+        """Test that binman rejects configurations missing a kernel{} subnode"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_missing_kernel.dts')
+        self.assertIn("Missing required subnode 'kernel'",
+                      str(exc.exception))
+
+    def testAndroidBootInvalidSubnode(self):
+        """Test that binman rejects invalid subnodes"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_invalid_subnode.dts')
+        self.assertIn("Unexpected subnode 'bacon'",
+                      str(exc.exception))
+
+    def testAndroidBootInvalidAddr(self):
+        """Test that binman rejects invalid addresses"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_invalid_addr.dts')
+        self.assertIn("kernel address 0xdeadbeefdafed00d does not fit in 32 bits",
+                      str(exc.exception))
+
+    def testAndroidBootOversizedBootName(self):
+        """Test that binman rejects boot-name exceeding 16 chars"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_oversized_bootname.dts')
+        self.assertIn("boot-name is 38 bytes, maximum is 16",
+                      str(exc.exception))
+
+    def testAndroidBootChonkyCells(self):
+        """Test that binman rejects >2 cell addresses"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_chonky_cells.dts')
+        self.assertIn("Property 'base' must contain one or two cells",
+                      str(exc.exception))
+
+    def testAndroidBootV0(self):
+        """Test that binman can produce a plain legacy Android boot image"""
+        data = self._DoReadFile('android_boot_v0.dts')
+        header = struct.unpack_from('<8s10I16s512s32s', data, 0)
+
+        self.assertEqual(b'ANDROID!', header[0])
+        self.assertEqual(len(U_BOOT_DATA), header[1])
+        self.assertEqual(0x80208000, header[2])
+        self.assertEqual(1, header[3])
+        self.assertEqual(0x81200000, header[4])
+        self.assertEqual(0, header[5])
+        self.assertEqual(0, header[6])
+        self.assertEqual(0x80200100, header[7])
+        self.assertEqual(0x800, header[8])
+        self.assertEqual(0, header[9])
+        self.assertEqual(0, header[10])
+        self.assertEqual(b'foo', header[12].split(b'\0', 1)[0])
+        self.assertEqual(self._AndroidBootId(U_BOOT_DATA, b'\0', b''),
+                         header[13])
+
+    def testAndroidBootV0WithDTB(self):
+        """Test that binman rejects v0 abootimgs containing a dtb section"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_dtb_in_v0.dts')
+        self.assertIn("Subnode 'dtb' requires header-version 2",
+                      str(exc.exception))
+
+    def testAndroidBootV2(self):
+        """Test that binman can produce an Android boot image"""
+        data = self._DoReadFile('android_boot_v2.dts')
+        header = struct.unpack_from('<8s10I16s512s32s1024sIQIIQ', data, 0)
+
+        self.assertEqual(b'ANDROID!', header[0])
+        self.assertEqual(len(U_BOOT_DATA), header[1])
+        self.assertEqual(0x80008000, header[2])
+        self.assertEqual(0, header[3])
+        self.assertEqual(0x81000000, header[4])
+        self.assertEqual(0, header[5])
+        self.assertEqual(0, header[6])
+        self.assertEqual(0x80000100, header[7])
+        self.assertEqual(0x800, header[8])
+        self.assertEqual(2, header[9])
+        self.assertEqual(0, header[10])
+        self.assertEqual(b'test-board', header[11].split(b'\0', 1)[0])
+        self.assertEqual(0, header[15])
+        self.assertEqual(0, header[16])
+        self.assertEqual(1660, header[17])
+        self.assertEqual(len(U_BOOT_DTB_DATA), header[18])
+        self.assertEqual(0x81f00000, header[19])
+        self.assertEqual(self._AndroidBootId(U_BOOT_DATA, b'', b'', b'',
+                                             U_BOOT_DTB_DATA), header[13])
+
+        cmdline = header[12].split(b'\0', 1)[0]
+        extra_cmdline = header[14].split(b'\0', 1)[0]
+        self.assertEqual(b"tests.. ", cmdline[-8:])
+        self.assertEqual(512, len(cmdline))
+        self.assertEqual(b'sup', extra_cmdline)
+
+        self.assertEqual(U_BOOT_DATA, data[0x800:0x800 + len(U_BOOT_DATA)])
+        self.assertEqual(U_BOOT_DTB_DATA,
+                         data[0x1000:0x1000 + len(U_BOOT_DTB_DATA)])
+
+    def testAndroidBootV2PageSizeTooSmol(self):
+        """Test that binman rejects page sizes that are smaller than header size"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_v2_pagesize_too_smol.dts')
+        self.assertIn("page-size must fit the Android boot image header",
+                      str(exc.exception))
+
+    def testAndroidBootV2MissingDTB(self):
+        """Test that binman rejects v2 abootimgs missing a DTB section"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_v2_missing_dtb.dts')
+        self.assertIn("Missing required subnode 'dtb'",
+                      str(exc.exception))
+
+    def testAndroidBootV2VendorDt(self):
+        """Test that binman rejects v2 abootimgs with a vendor-dt section"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('android_boot_v2_vendor_dt.dts')
+        self.assertIn("Subnode 'vendor-dt' requires header-version 0",
+                      str(exc.exception))
+
+    def testAndroidBootVendorDt(self):
+        """Test that android-boot can embed an arbitrary vendor-dt section"""
+        data = self._DoReadFile('android_boot_vendor_dt.dts')
+        header = struct.unpack_from('<8s10I16s512s32s', data, 0)
+        page_size = 2048
+        vendor_dt_offset = page_size * 3
+        vendor_dt = b'howdy'
+        self.assertEqual(len(vendor_dt), header[9])
+        self.assertEqual(0, header[10])
+        self.assertEqual(self._AndroidBootId(U_BOOT_DATA, b'\0', b'',
+                                             vendor_dt), header[13])
+        self.assertEqual(vendor_dt + b'\0' * (page_size - len(vendor_dt)),
+                         data[vendor_dt_offset:vendor_dt_offset + page_size])
+        self.assertEqual(vendor_dt_offset + page_size, len(data))
+
+    def testQcdt(self):
+        """Test that binman can produce a QCDT container"""
+        data, dtb_data, _map, _dtb = self._DoReadFileDtb(
+            'qcdt.dts', use_real_dtb=True)
+
+        dtb_size = tools.align(len(dtb_data), 0x800)
+
+        self.assertEqual(b'QCDT', data[:4])
+        self.assertEqual((2, 2), struct.unpack_from('<II', data, 4))
+        self.assertEqual((0xce, 0xce08ff01, 1, 0, 0x800, dtb_size),
+                          struct.unpack_from('<IIIIII', data, 12))
+        self.assertEqual((0xcf, 0xce08ff02, 2, 1, 0x800 + dtb_size,
+                          dtb_size), struct.unpack_from('<IIIIII', data, 36))
+        self.assertEqual(0xd00dfeed,
+                          struct.unpack_from('>I', data, 0x800)[0])
+        self.assertEqual(dtb_data, data[0x800:0x800 + len(dtb_data)])
+        self.assertEqual(dtb_data, data[0x800 + dtb_size:0x800 + dtb_size +
+                                         len(dtb_data)])
+
+    def testQcdtPageSizeFromParent(self):
+        """Test that QCDT inherits page-size from parent android-boot node"""
+        data, dtb_data, _map, _dtb = self._DoReadFileDtb(
+            'qcdt_page_size_from_abootimg.dts')
+
+        # header+kernel are aligned to 4096, vendor-dt follows after that.
+        vendor_dt_offset = 4096*2
+
+        self.assertEqual(b'QCDT', data[vendor_dt_offset:vendor_dt_offset + 4])
+        self.assertEqual((4096, 4096),
+                         struct.unpack_from('<16xII', data,
+                                            vendor_dt_offset + 12))
+
+    def testQcdtBadMsmId(self):
+        """Test that QCDT rejects invalid msm-id properties"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('qcdt_bad_msm_id.dts')
+        self.assertIn("Property 'qcom,msm-id' must contain exactly 2 cells",
+                      str(exc.exception))
+
+    def testQcdtMissingMsmId(self):
+        """Test that QCDT rejects missing qcom,msm-id"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('qcdt_missing_msm_id.dts')
+        self.assertIn("Missing required property 'qcom,msm-id'",
+                      str(exc.exception))
+
+    def testQcdtMissingDTBPayload(self):
+        """Test that QCDT rejects missing DTB payload"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('qcdt_missing_payload.dts')
+        self.assertIn("Missing required DTB payload subnode",
+                      str(exc.exception))
+
+    def testQcdtMissingSubnodes(self):
+        """Test that QCDT rejects missing dtb subnodes"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('qcdt_missing_subnodes.dts')
+        self.assertIn("Missing required DTB subnodes",
+                      str(exc.exception))
+
+    def testQcdtInvalidPageSize(self):
+        """Test that QCDT rejects invalid page-size"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('qcdt_invalid_pagesize.dts')
+        self.assertIn("page-size must be a power of two",
+                      str(exc.exception))
+
+    def testQcdtZeroPageSize(self):
+        """Test that QCDT rejects zero page-size"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('qcdt_zero_pagesize.dts')
+        self.assertIn("page-size must be a power of two",
+                      str(exc.exception))
+
+    def testQcdtMultipleDTBs(self):
+        """Test that QCDT handles multiple embedded DTBs"""
+        data = self._DoReadFile('qcdt_multiple_dtbs.dts')
+
+        page_size = 0x100
+        payload_size = page_size
+        payload_pad = tools.get_bytes(0, page_size - 1)
+
+        self.assertEqual(b'QCDT', data[:4])
+        self.assertEqual((2, 2), struct.unpack_from('<II', data, 4))
+        self.assertEqual((0xce, 0xce08ff01, 1, 0, page_size,
+                          payload_size),
+                         struct.unpack_from('<IIIIII', data, 12))
+        self.assertEqual((0xcf, 0xce08ff02, 3, 2,
+                          page_size + payload_size, payload_size),
+                         struct.unpack_from('<IIIIII', data, 36))
+        self.assertEqual(tools.get_bytes(0x11, 1) + payload_pad,
+                         data[page_size:page_size + payload_size])
+        self.assertEqual(tools.get_bytes(0x22, 1) + payload_pad,
+                         data[page_size + payload_size:
+                              page_size + payload_size * 2])
+
+    def testDtbh(self):
+        """Test that binman can produce a DTBH container"""
+        data, dtb_data, _map, _dtb = self._DoReadFileDtb(
+            'dtbh.dts', use_real_dtb=True)
+
+        dtb_size = tools.align(len(dtb_data), 0x800)
+
+        self.assertEqual(b'DTBH', data[:4])
+        self.assertEqual((2, 1), struct.unpack_from('<II', data, 4))
+        self.assertEqual((7870, 0x50a6, 0x217584da, 123, 321, 0x800,
+                          dtb_size, 0x20),
+                         struct.unpack_from('<8I', data, 12))
+        self.assertEqual(0, struct.unpack_from('<I', data, 44)[0])
+        self.assertEqual(0xd00dfeed,
+                          struct.unpack_from('>I', data, 0x800)[0])
+        self.assertEqual(dtb_data, data[0x800:0x800 + len(dtb_data)])
+
+    def testDtbhMulti(self):
+        """Test that DTBH handles explicit properties and multiple DTBs"""
+        data, dtb_data, _map, _dtb = self._DoReadFileDtb(
+            'dtbh_multi.dts', use_real_dtb=True)
+
+        page_size = 0x100
+        dtb_size = tools.align(len(dtb_data), page_size)
+
+        self.assertEqual(b'DTBH', data[:4])
+        self.assertEqual((2, 2), struct.unpack_from('<II', data, 4))
+        self.assertEqual((7870, 0x1234, 0x56789abc, 123, 321, page_size,
+                          dtb_size, 0x20),
+                         struct.unpack_from('<8I', data, 12))
+        self.assertEqual((7871, 0x1234, 0x56789abc, 124, 322,
+                          page_size + dtb_size, dtb_size, 0x20),
+                         struct.unpack_from('<8I', data, 44))
+        self.assertEqual(0, struct.unpack_from('<I', data, 76)[0])
+        self.assertEqual(0xd00dfeed,
+                          struct.unpack_from('>I', data, page_size)[0])
+        self.assertEqual(dtb_data, data[page_size:page_size + len(dtb_data)])
+        self.assertEqual(dtb_data,
+                         data[page_size + dtb_size:page_size + dtb_size +
+                              len(dtb_data)])
+
+    def testDtbhPageSizeFromParent(self):
+        """Test that DTBH inherits page-size from parent android-boot node"""
+        data, dtb_data, _map, _dtb = self._DoReadFileDtb(
+            'dtbh_page_size_from_abootimg.dts', use_real_dtb=True)
+
+        # header+kernel are aligned to 4096, vendor-dt follows after that.
+        vendor_dt_offset = 4096 * 2
+        dtb_size = tools.align(len(dtb_data), 4096)
+
+        self.assertEqual(b'DTBH', data[vendor_dt_offset:vendor_dt_offset+4])
+        self.assertEqual((4096, dtb_size),
+                         struct.unpack_from('<20x2I', data,
+                                            vendor_dt_offset + 12))
+
+    def testDtbhBadModelInfo(self):
+        """Test that DTBH rejects invalid model_info properties"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFileDtb('dtbh_bad_model_info.dts',
+                                use_real_dtb=True)
+        self.assertIn("subnode 'dtb-0': Property 'model_info-chip' must "
+                      "contain exactly 1 cells", str(exc.exception))
+
+    def testDtbhMissingModelInfo(self):
+        """Test that DTBH rejects missing model_info properties"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFileDtb('dtbh_missing_model_info.dts',
+                                use_real_dtb=True)
+        self.assertIn("subnode 'dtb-0': Missing required property "
+                      "'model_info-chip'", str(exc.exception))
+
+    def testDtbhInvalidPageSize(self):
+        """Test that DTBH rejects invalid page-size"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('dtbh_invalid_pagesize.dts')
+        self.assertIn("page-size must be a power of two",
+                      str(exc.exception))
+
+    def testDtbhMultipleDTBs(self):
+        """Test that DTBH rejects multiple embedded DTBs"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('dtbh_multiple_dtbs.dts')
+        self.assertIn("must contain exactly one DTB",
+                      str(exc.exception))
+
+    def testDtbhMissingDTBPayload(self):
+        """Test that DTBH rejects missing DTB payload"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('dtbh_missing_payload.dts')
+        self.assertIn("Missing required DTB payload subnode",
+                      str(exc.exception))
+
+    def testDtbhMissingSubnodes(self):
+        """Test that DTBH rejects missing dtb subnodes"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('dtbh_missing_subnodes.dts')
+        self.assertIn("Missing required DTB subnodes",
+                      str(exc.exception))
+
+    def testDtbhOnlySpecialSubnodes(self):
+        """Test that DTBH rejects special-only subnodes"""
+        with self.assertRaises(ValueError) as exc:
+            self._DoReadFile('dtbh_special_subnodes.dts')
+        self.assertIn("Missing required DTB subnodes",
+                      str(exc.exception))
+
     def testFitFdtOper(self):
         """Check handling of a specified FIT operation"""
         entry_args = {
