@@ -3,4 +3,5 @@ obj-$(CONFIG_$(PHASE_)ARM_PSCI_FW)	+= psci.o
 obj-$(CONFIG_TI_SCI_PROTOCOL)	+= ti_sci.o
 obj-$(CONFIG_SANDBOX)		+= firmware-sandbox.o
 obj-$(CONFIG_ZYNQMP_FIRMWARE)	+= firmware-zynqmp.o
+obj-$(CONFIG_QCOM_SCM)		+= qcom-scm.o
 obj-$(CONFIG_SCMI_FIRMWARE)	+= scmi/

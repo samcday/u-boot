@@ -17,6 +17,8 @@ enum qcom_boot_source {
 
 extern enum qcom_boot_source qcom_boot_source;
 
+void qcom_msm8916_smp_fixup(void *fdt);
+
 #if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
 void qcom_configure_capsule_updates(void);
 #else
