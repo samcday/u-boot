@@ -23,6 +23,23 @@
 #include <phys2bus.h>
 #include <power/regulator.h>
 
+#if CONFIG_IS_ENABLED(DM_REGULATOR)
+static int sdhci_set_vqmmc_voltage(struct udevice *supply, int uV)
+{
+	struct dm_regulator_uclass_plat *uc_pdata;
+	int target_uV = uV;
+
+	uc_pdata = dev_get_uclass_plat(supply);
+	if (uV == 3300000 && uc_pdata &&
+	    uc_pdata->max_uV != -ENODATA &&
+	    uc_pdata->max_uV < uV &&
+	    uc_pdata->max_uV >= 2700000)
+		target_uV = uc_pdata->max_uV;
+
+	return regulator_set_value(supply, target_uV);
+}
+#endif
+
 static void sdhci_reset(struct sdhci_host *host, u8 mask)
 {
 	unsigned long timeout;
@@ -566,7 +583,7 @@ void sdhci_set_voltage(struct sdhci_host *host)
 					return;
 				}
 
-				if (regulator_set_value(mmc->vqmmc_supply, 3300000)) {
+				if (sdhci_set_vqmmc_voltage(mmc->vqmmc_supply, 3300000)) {
 					pr_err("failed to set vqmmc-voltage to 3.3V\n");
 					return;
 				}
@@ -602,7 +619,7 @@ void sdhci_set_voltage(struct sdhci_host *host)
 					return;
 				}
 
-				if (regulator_set_value(mmc->vqmmc_supply, 1800000)) {
+				if (sdhci_set_vqmmc_voltage(mmc->vqmmc_supply, 1800000)) {
 					pr_err("failed to set vqmmc-voltage to 1.8V\n");
 					return;
 				}
