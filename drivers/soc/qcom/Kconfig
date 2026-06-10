@@ -25,4 +25,12 @@ config QCOM_RPMH
 	  Say y here to support the Qualcomm RPMh (resource peripheral manager)
 	  if you need to control regulators on Qualcomm platforms, say y here.
 
+config QCOM_SMD_RPM
+	bool "Qualcomm RPM-SMD support"
+	depends on DM_MAILBOX
+	help
+	  Say y here to support the Qualcomm RPM-SMD protocol over the
+	  GLINK-RPM message RAM transport. This is used for regulators on
+	  pre-RPMh Qualcomm platforms.
+
 endif # SOC_QCOM

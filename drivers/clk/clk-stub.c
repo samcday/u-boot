@@ -9,12 +9,15 @@
 
 #include <clk-uclass.h>
 #include <dm.h>
+#include <linux/kconfig.h>
 
 /* NOP parent nodes to stub clocks */
 static const struct udevice_id nop_parent_ids[] = {
 	{ .compatible = "qcom,rpm-proc" },
+#if !IS_ENABLED(CONFIG_QCOM_SMD_RPM)
 	{ .compatible = "qcom,glink-rpm" },
 	{ .compatible = "qcom,glink-smd-rpm" },
+#endif
 	{ }
 };
 
@@ -71,4 +74,3 @@ U_BOOT_DRIVER(clk_stub) = {
 	.of_match = stub_clk_ids,
 	.flags = DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
-
