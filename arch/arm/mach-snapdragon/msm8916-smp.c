@@ -72,7 +72,7 @@ static int fdt_del_range(void *fdt, int node, const char *prop, int offset,
 static int remove_psci_power_domain(void *fdt, int cpu)
 {
 	int domain_len = 0, domain_offset = 0;
-	int i, index, name_offset, ret;
+	int i, index, name_len, name_offset, ret;
 	struct fdtdec_phandle_args args;
 	const char *name, *names;
 
@@ -83,9 +83,9 @@ static int remove_psci_power_domain(void *fdt, int cpu)
 		return index;
 
 	names = fdt_getprop(fdt, cpu, PD_NAMES, NULL);
-	name = fdt_stringlist_get(fdt, cpu, PD_NAMES, index, &ret);
+	name = fdt_stringlist_get(fdt, cpu, PD_NAMES, index, &name_len);
 	if (!names || !name)
-		return ret;
+		return name_len;
 	name_offset = name - names;
 
 	for (i = 0; i <= index; i++) {
