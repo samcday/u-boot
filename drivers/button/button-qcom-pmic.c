@@ -13,9 +13,9 @@
 #include <dm/lists.h>
 #include <log.h>
 #include <power/pmic.h>
-#include <spmi/spmi.h>
 #include <linux/bitops.h>
 #include <time.h>
+#include "button/qcom-pmic.h"
 
 #define REG_TYPE		0x4
 #define REG_SUBTYPE		0x5
@@ -174,7 +174,7 @@ static int qcom_pwrkey_probe(struct udevice *dev)
 	return 0;
 }
 
-static int button_qcom_pmic_bind(struct udevice *parent)
+int button_qcom_pmic_setup(struct udevice *parent)
 {
 	struct udevice *dev;
 	ofnode node;
@@ -216,7 +216,6 @@ static const struct button_ops button_qcom_pmic_ops = {
 };
 
 static const struct udevice_id qcom_pwrkey_ids[] = {
-	{ .compatible = "qcom,pm8916-pon" },
 	{ .compatible = "qcom,pm8941-pon" },
 	{ .compatible = "qcom,pm8998-pon" },
 	{ .compatible = "qcom,pmk8350-pon" },
@@ -227,7 +226,7 @@ U_BOOT_DRIVER(qcom_pwrkey) = {
 	.name = "qcom_pwrkey",
 	.id = UCLASS_BUTTON,
 	.of_match = qcom_pwrkey_ids,
-	.bind = button_qcom_pmic_bind,
+	.bind = button_qcom_pmic_setup,
 	.probe = qcom_pwrkey_probe,
 	.ops = &button_qcom_pmic_ops,
 	.priv_auto = sizeof(struct qcom_pmic_btn_priv),
