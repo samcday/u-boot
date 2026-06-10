@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 
+#include <config.h>
 #include <dt-bindings/arm/qcom,ids.h>
 
 / {
@@ -22,6 +23,51 @@
 		cont_splash_mem: memory@8e000000 {
 			reg = <0x0 0x8e000000 0x0 0x002a3000>;
 			no-map;
+		};
+	};
+
+	binman: binman {
+		multiple-images;
+
+		u-boot-samsung-a5u-eur {
+			filename = "u-boot-samsung-a5u-eur.img";
+
+			android-boot {
+				header-version = <0>;
+				page-size = <2048>;
+				base = <0x80000000>;
+				append-seandroid-enforce;
+
+				kernel {
+					u-boot {
+						no-expanded;
+					};
+				};
+
+				ramdisk {
+					fill {
+						size = <1>;
+					};
+				};
+
+				vendor-dt {
+					qcdt {
+						dtb-0 {
+							#address-cells = <2>;
+							#size-cells = <2>;
+							compatible = "samsung,a5u-eur", "qcom,msm8916";
+							qcom,msm-id = <QCOM_ID_MSM8916 0>;
+							qcom,board-id = <0xce08ff01 1>;
+
+							chosen {};
+							memory@80000000 {
+								device_type = "memory";
+								reg = <0 0x80000000 0 0>;
+							};
+						};
+					};
+				};
+			};
 		};
 	};
 };
