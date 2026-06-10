@@ -36,6 +36,13 @@ config MPFS_MBOX
 	  Enable support for the mailboxes that provide a communication
 	  channel with the system controller integrated on PolarFire SoC.
 
+config QCOM_APCS_IPC
+	bool "Enable Qualcomm APCS IPC mailbox support"
+	depends on DM_MAILBOX && ARCH_SNAPDRAGON
+	help
+	  Enable support for the Qualcomm APCS IPC doorbell used to notify
+	  remote processors such as RPM after writing shared-memory messages.
+
 config SANDBOX_MBOX
 	bool "Enable the sandbox mailbox test driver"
 	depends on DM_MAILBOX && SANDBOX
