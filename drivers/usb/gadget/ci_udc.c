@@ -10,6 +10,7 @@
 #include <command.h>
 #include <config.h>
 #include <cpu_func.h>
+#include <dm.h>
 #include <net.h>
 #include <malloc.h>
 #include <wait_bit.h>
@@ -94,8 +95,17 @@ static struct usb_request *
 ci_ep_alloc_request(struct usb_ep *ep, unsigned int gfp_flags);
 static void ci_ep_free_request(struct usb_ep *ep, struct usb_request *_req);
 
+#if CONFIG_IS_ENABLED(DM_USB_GADGET)
+static int ci_udc_gadget_start(struct usb_gadget *g, struct usb_gadget_driver *driver);
+static int ci_udc_gadget_stop(struct usb_gadget *g);
+#endif
+
 static const struct usb_gadget_ops ci_udc_ops = {
 	.pullup = ci_pullup,
+#if CONFIG_IS_ENABLED(DM_USB_GADGET)
+	.udc_start = ci_udc_gadget_start,
+	.udc_stop = ci_udc_gadget_stop,
+#endif
 };
 
 static const struct usb_ep_ops ci_ep_ops = {
@@ -978,7 +988,7 @@ void udc_irq(void)
 	}
 }
 
-int dm_usb_gadget_handle_interrupts(struct udevice *dev)
+static int ci_udc_handle_interrupts(struct udevice *dev)
 {
 	struct ci_udc *udc = (struct ci_udc *)controller.ctrl->hcor;
 	u32 value;
@@ -1037,7 +1047,7 @@ static int ci_pullup(struct usb_gadget *gadget, int is_on)
 static int ci_udc_probe(void)
 {
 	struct ept_queue_head *head;
-	int i;
+	int i, ret;
 
 	const int num = 2 * NUM_ENDPOINTS;
 
@@ -1045,6 +1055,14 @@ static int ci_udc_probe(void)
 	const int eplist_align = roundup(eplist_min_align, ARCH_DMA_MINALIGN);
 	const int eplist_raw_sz = num * sizeof(struct ept_queue_head);
 	const int eplist_sz = roundup(eplist_raw_sz, ARCH_DMA_MINALIGN);
+
+	if (IS_ENABLED(CONFIG_DM_USB))
+		ret = usb_setup_ehci_gadget(&controller.ctrl);
+	else
+		ret = usb_lowlevel_init(0, USB_INIT_DEVICE, (void **)&controller.ctrl);
+
+	if (ret)
+		return ret;
 
 	/* The QH list must be aligned to 4096 bytes. */
 	controller.epts = memalign(eplist_align, eplist_sz);
@@ -1123,6 +1141,73 @@ static int ci_udc_probe(void)
 	return 0;
 }
 
+static void ci_udc_remove(void)
+{
+	if (IS_ENABLED(CONFIG_DM_USB)) {
+		usb_remove_ehci_gadget(&controller.ctrl);
+	} else {
+		usb_lowlevel_stop(0);
+		controller.ctrl = NULL;
+	}
+}
+
+static void ci_udc_stop(void)
+{
+	ci_ep_free_request(&controller.ep[0].ep, &controller.ep0_req->req);
+	free(controller.items_mem);
+	free(controller.epts);
+}
+
+static int ci_udc_gadget_start(struct usb_gadget *g, struct usb_gadget_driver *driver)
+{
+	controller.driver = driver;
+	return 0;
+}
+
+#if CONFIG_IS_ENABLED(DM_USB_GADGET)
+static int ci_udc_generic_probe(struct udevice *dev)
+{
+	int ret = ci_udc_probe();
+
+	if (ret)
+		return ret;
+
+	return usb_add_gadget_udc((struct device *)dev, &controller.gadget);
+}
+
+static int ci_udc_generic_remove(struct udevice *dev)
+{
+	usb_del_gadget_udc(&controller.gadget);
+
+	ci_udc_remove();
+
+	return 0;
+}
+
+static const struct usb_gadget_generic_ops ci_udc_generic_ops = {
+	.handle_interrupts	= ci_udc_handle_interrupts,
+};
+
+U_BOOT_DRIVER(ci_udc_generic) = {
+	.name = "ci-udc",
+	.id = UCLASS_USB_GADGET_GENERIC,
+	.ops = &ci_udc_generic_ops,
+	.probe = ci_udc_generic_probe,
+	.remove = ci_udc_generic_remove,
+};
+
+static int ci_udc_gadget_stop(struct usb_gadget *g)
+{
+	/* Avoid calling disconnect() twice; the UDC uclass already did it. */
+	controller.driver = NULL;
+	udc_disconnect();
+
+	ci_udc_stop();
+
+	return 0;
+}
+
+#else
 int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 {
 	int ret;
@@ -1131,14 +1216,6 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 		return -EINVAL;
 	if (!driver->bind || !driver->setup || !driver->disconnect)
 		return -EINVAL;
-
-#if CONFIG_IS_ENABLED(DM_USB)
-	ret = usb_setup_ehci_gadget(&controller.ctrl);
-#else
-	ret = usb_lowlevel_init(0, USB_INIT_DEVICE, (void **)&controller.ctrl);
-#endif
-	if (ret)
-		return ret;
 
 	ret = ci_udc_probe();
 	if (ret) {
@@ -1151,7 +1228,8 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 		DBG("driver->bind() returned %d\n", ret);
 		return ret;
 	}
-	controller.driver = driver;
+
+	ci_udc_gadget_start(&controller.gadget, driver);
 
 	return 0;
 }
@@ -1163,19 +1241,17 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	driver->unbind(&controller.gadget);
 	controller.driver = NULL;
 
-	ci_ep_free_request(&controller.ep[0].ep, &controller.ep0_req->req);
-	free(controller.items_mem);
-	free(controller.epts);
-
-#if CONFIG_IS_ENABLED(DM_USB)
-	usb_remove_ehci_gadget(&controller.ctrl);
-#else
-	usb_lowlevel_stop(0);
-	controller.ctrl = NULL;
-#endif
+	ci_udc_stop();
+	ci_udc_remove();
 
 	return 0;
 }
+
+int dm_usb_gadget_handle_interrupts(struct udevice *dev)
+{
+	return ci_udc_handle_interrupts(dev);
+}
+#endif
 
 bool dfu_usb_get_reset(void)
 {
