@@ -341,6 +341,8 @@ int stdio_add_devices(void)
 #ifdef CONFIG_USB_FUNCTION_ACM
 	drv_usbacm_init ();
 #endif
+	if (IS_ENABLED(CONFIG_QCOM_EUD_CONSOLE))
+		drv_qcom_eud_console_init();
 	if (IS_ENABLED(CONFIG_NETCONSOLE))
 		drv_nc_init();
 #ifdef CONFIG_JTAG_CONSOLE

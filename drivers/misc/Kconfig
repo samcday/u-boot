@@ -101,6 +101,14 @@ config QCOM_EUD
 	  driver enables EUD and prepares the USB device controller so that a
 	  host-side EUD tool can expose debug peripherals such as COM.
 
+config QCOM_EUD_CONSOLE
+	bool "Qualcomm EUD stdio console"
+	depends on QCOM_EUD
+	help
+	  Enable a transmit-only stdio console named "qcom-eud" that writes to
+	  the EUD COM peripheral. Selecting this option only registers the
+	  console name; EUD is enabled lazily when the console is started.
+
 config ROCKCHIP_EFUSE
         bool "Rockchip e-fuse support"
 	depends on MISC

@@ -201,6 +201,75 @@ static const struct misc_ops qcom_eud_ops = {
 	.set_enabled = qcom_eud_misc_set_enabled,
 };
 
+#if IS_ENABLED(CONFIG_QCOM_EUD_CONSOLE)
+static int qcom_eud_console_start(struct stdio_dev *sdev)
+{
+	struct udevice *dev;
+	int ret;
+
+	if (sdev->priv)
+		return 0;
+
+	ret = qcom_eud_get(&dev);
+	if (ret)
+		return ret;
+
+	ret = qcom_eud_enable(dev);
+	if (ret)
+		return ret;
+
+	sdev->priv = dev;
+
+	return 0;
+}
+
+static int qcom_eud_console_stop(struct stdio_dev *sdev)
+{
+	sdev->priv = NULL;
+
+	return 0;
+}
+
+static struct udevice *qcom_eud_console_get_dev(struct stdio_dev *sdev)
+{
+	if (!sdev->priv && qcom_eud_console_start(sdev))
+		return NULL;
+
+	return sdev->priv;
+}
+
+static void qcom_eud_console_putc(struct stdio_dev *sdev, const char c)
+{
+	struct udevice *dev = qcom_eud_console_get_dev(sdev);
+
+	if (dev)
+		qcom_eud_com_write(dev, QCOM_EUD_COM_APPS_ID, &c, 1);
+}
+
+static void qcom_eud_console_puts(struct stdio_dev *sdev, const char *str)
+{
+	struct udevice *dev = qcom_eud_console_get_dev(sdev);
+
+	if (dev)
+		qcom_eud_com_write(dev, QCOM_EUD_COM_APPS_ID, str, strlen(str));
+}
+
+int drv_qcom_eud_console_init(void)
+{
+	struct stdio_dev stdio;
+
+	memset(&stdio, 0, sizeof(stdio));
+	strcpy(stdio.name, "qcom-eud");
+	stdio.flags = DEV_FLAGS_OUTPUT;
+	stdio.putc = qcom_eud_console_putc;
+	stdio.puts = qcom_eud_console_puts;
+	stdio.start = qcom_eud_console_start;
+	stdio.stop = qcom_eud_console_stop;
+
+	return stdio_register(&stdio);
+}
+#endif
+
 static int qcom_eud_probe(struct udevice *dev)
 {
 	struct qcom_eud_priv *priv = dev_get_priv(dev);
