@@ -13,6 +13,7 @@
 #include <linux/bitops.h>
 #include <linux/delay.h>
 #include <linux/errno.h>
+#include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/usb/gadget.h>
@@ -20,10 +21,13 @@
 #define EUD_REG_COM_TX_ID	0x0000
 #define EUD_REG_COM_TX_LEN	0x0004
 #define EUD_REG_COM_TX_DAT	0x0008
+#define EUD_REG_INT_STATUS_1	0x0044
 #define EUD_REG_CSR_EUD_EN	0x1014
 
-#define EUD_MAX_FIFO_SIZE	14
+#define EUD_INT_TX		BIT(1)
+#define EUD_MAX_FIFO_SIZE	1
 #define EUD_PACKET_DELAY_US	1000
+#define EUD_TX_TIMEOUT_US	100000
 
 struct qcom_eud_priv {
 	void __iomem *base;
@@ -57,6 +61,14 @@ static void qcom_eud_writel(struct qcom_eud_priv *priv, u32 val, u32 offset)
 static u32 qcom_eud_readl(struct qcom_eud_priv *priv, u32 offset)
 {
 	return readl(qcom_eud_reg(priv, offset));
+}
+
+static int qcom_eud_wait_tx_flushed(struct qcom_eud_priv *priv)
+{
+	u32 reg;
+
+	return readl_poll_timeout(qcom_eud_reg(priv, EUD_REG_INT_STATUS_1),
+				  reg, reg & EUD_INT_TX, EUD_TX_TIMEOUT_US);
 }
 
 int qcom_eud_get(struct udevice **devp)
@@ -135,6 +147,7 @@ int qcom_eud_com_write(struct udevice *dev, u8 id, const void *buf, size_t len)
 	size_t todo;
 	size_t i;
 	u32 reg;
+	int ret;
 
 	if (!dev)
 		return -ENODEV;
@@ -152,11 +165,11 @@ int qcom_eud_com_write(struct udevice *dev, u8 id, const void *buf, size_t len)
 		reg = qcom_eud_readl(priv, EUD_REG_COM_TX_ID);
 		if ((u8)reg != id)
 			return -EIO;
+		qcom_eud_writel(priv, todo, EUD_REG_COM_TX_LEN);
 
 		for (i = 0; i < todo; i++)
 			qcom_eud_writel(priv, data[i], EUD_REG_COM_TX_DAT);
 
-		qcom_eud_writel(priv, todo, EUD_REG_COM_TX_LEN);
 
 		data += todo;
 		len -= todo;
