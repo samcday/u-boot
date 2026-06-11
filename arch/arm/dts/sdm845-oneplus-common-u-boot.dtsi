@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
+
+/ {
+	eud: eud@88e0000 {
+		compatible = "qcom,sdm845-eud", "qcom,eud";
+		reg = <0 0x088e0000 0 0x2000>;
+	};
+};
