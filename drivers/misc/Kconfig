@@ -93,6 +93,14 @@ config QCOM_GENI
 	  for providing a common interface for various peripherals like UART, I2C, SPI,
 	  etc.
 
+config QCOM_EUD
+	bool "Qualcomm Embedded USB Debugger"
+	depends on MISC && DM_USB_GADGET
+	help
+	  Enable support for the Qualcomm Embedded USB Debugger block. This
+	  driver enables EUD and prepares the USB device controller so that a
+	  host-side EUD tool can expose debug peripherals such as COM.
+
 config ROCKCHIP_EFUSE
         bool "Rockchip e-fuse support"
 	depends on MISC

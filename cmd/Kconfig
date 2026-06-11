@@ -2435,13 +2435,11 @@ config CMD_CONITRACE
 	  from the console input as hexadecimal numbers.
 
 config CMD_EUD
-	bool "eud - Qualcomm SDM845 Embedded USB Debugger test"
-	depends on ARCH_SNAPDRAGON && USB_GADGET_DOWNLOAD && USB_FUNCTION_ACM
+	bool "eud - Qualcomm Embedded USB Debugger"
+	depends on QCOM_EUD
 	help
-	  Enable the 'eud' command, which directly controls the Qualcomm
-	  SDM845 Embedded USB Debugger block at 0x088e0000, starts the ACM
-	  gadget to trigger EUD enumeration, and writes a periodic COM
-	  heartbeat until any key is pressed.
+	  Enable the 'eud' command, which controls the Qualcomm Embedded USB
+	  Debugger block and can write to the EUD COM peripheral.
 
 config CMD_CLS
 	bool "Enable clear screen command 'cls'"
